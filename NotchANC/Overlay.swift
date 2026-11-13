@@ -1,11 +1,11 @@
 // Menu-bar-height pill for AirPods Active Noise Cancellation, one per selected display.
 // Beside a camera cutout (notch or Dynamic Island):
-//   Collapsed:  [waveform.slash] [ ---- cutout ---- ] [waveform]
-//   Hovered:    [waveform.slash] NOISE CANCELLATION ON [ -- cutout -- ] Title — Artist [waveform]
+//   Collapsed:  [moon] [ ---- cutout ---- ] [waveform]
+//   Hovered:    [moon] NOISE CANCELLATION ON [ -- cutout -- ] Title — Artist [waveform]
 //   Both text areas have the ANC label's width; a longer track title scrolls.
 // Without a cutout the pill keeps its full size and hovering swaps the text in place:
-//   [waveform.slash] NOISE CANCELLATION ON • NOISE CANC… [waveform]  →  [waveform.slash] Title — Artist [waveform]
-// With ANC off but media playing, the pill shows in blue with a music note: beside a cutout as above
+//   [moon] NOISE CANCELLATION ON • NOISE CANC… [waveform]  →  [moon] Title — Artist [waveform]
+// With ANC off but media playing, the pill shows in blue with a music note list: beside a cutout as above
 // with "NOW PLAYING" as the label; elsewhere the current track shows directly, hovered or not.
 
 import Cocoa
@@ -22,8 +22,8 @@ enum PillMode {
     case anc, media
 
     var label: String { self == .anc ? "NOISE CANCELLATION ON" : "NOW PLAYING" }
-    // Outside noise cut out, versus your own audio playing.
-    var symbol: String { self == .anc ? "waveform.slash" : "music.note" }
+    // Quiet, like Do Not Disturb, versus something playing.
+    var symbol: String { self == .anc ? "moon.fill" : "music.note.list" }
 }
 
 // Where the pill goes on one screen. macOS reports a notch and a Dynamic Island the same way:
