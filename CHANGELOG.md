@@ -2,6 +2,7 @@
 
 ## [1.0.2]
 - Hovering opens the pill evenly on both sides: "Noise Cancellation On" on the left and the current track on the right, at the same width. Long titles scroll instead of widening the pill.
+- Titles in Myanmar, Thai and other tall scripts are no longer cut off at the bottom.
 
 ## [1.0.1]
 - **Hover to see Now Playing.** The pill now stays compact: AirPods icon, notch, waveform. Hover it and the left side slides open to show the current track, or "Noise Cancellation On" when nothing is loaded.
