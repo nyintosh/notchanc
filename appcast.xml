@@ -2,5 +2,13 @@
 <rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
     <channel>
         <title>NotchANC</title>
+        <item>
+            <title>1.0.0</title>
+            <pubDate>Fri, 13 Nov 2026 18:35:01 +0700</pubDate>
+            <sparkle:version>2</sparkle:version>
+            <sparkle:shortVersionString>1.0.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/nyintosh/notchanc/releases/download/v1.0.0/NotchANC-1.0.0.dmg" length="1908632" type="application/octet-stream" sparkle:edSignature="IBEQ4XgiE8fN3he/cnbZvB+GhMTyB0wbC4mcDWy6pY+kH0tb23OwgQhFVc1kT0PfnEFr7iOktfp5PLtHK5SMAw=="/>
+        </item>
     </channel>
 </rss>
