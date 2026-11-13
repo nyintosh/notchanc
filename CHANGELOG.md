@@ -4,6 +4,8 @@
 - **Now Playing without ANC.** When Noise Cancellation is off but something is playing through headphones (AirPods, any Bluetooth headset, or the headphone jack), the pill appears in blue with a music note list, "Now Playing" and the moving waveform. On displays without a notch it shows the current track directly. It hides two seconds after playback stops, so it doesn't flash between tracks.
 - The Noise Cancellation pill and menu bar icon use a moon (quiet, like Do Not Disturb) instead of the AirPods glyph.
 - **Right-click the pill** for the same menu as the menu bar icon: Settings, Check for Updates, Quit and the Noise Cancellation toggles. Handy with the menu bar icon hidden. Clicking the pill never takes focus from the app you're using.
+- If Now Playing can't be read (for example on an older macOS), NotchANC retries less and less often instead of every few seconds.
+- New README with screenshots, install steps and how it works. NotchANC is now MIT licensed.
 
 ## [1.0.2]
 - Hovering opens the pill evenly on both sides: "Noise Cancellation On" on the left and the current track on the right, at the same width. Long titles scroll instead of widening the pill.
