@@ -16,6 +16,10 @@ let presets: [(name: String, hex: String)] = [
     ("Blue", "#0A84FF"), ("Indigo", "#5E5CE6"), ("Purple", "#BF5AF2"), ("Pink", "#FF375F"), ("Red", "#FF453A"),
 ]
 
+// Menu bar icon choices while Noise Cancellation is off; the first is the default.
+let menuBarIcons = ["airpodspro", "airpods", "headphones", "beats.headphones", "ear.fill",
+                    "moon.fill", "waveform", "music.note", "speaker.wave.2.fill", "sparkles"]
+
 // Each state has its own colour and icon, stored in UserDefaults (registered at launch).
 enum PillMode: CaseIterable {
     case anc, media

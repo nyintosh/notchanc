@@ -47,7 +47,7 @@ On displays without a notch, such as an external monitor, the pill sits centred 
 - **Stays out of the way.** Clicks pass through to the menu bar. Behind full-screen apps on external displays it hides. Clicking it never steals focus.
 - **Right-click the pill** for Settings, Check for Updates and Quit.
 - **Hide the menu bar icon** if you prefer. Open NotchANC again to bring up Settings.
-- **Make it yours.** Pick the colour (any colour) and icon for each state, turn the Now Playing pill off, open at login, and get automatic updates.
+- **Make it yours.** Pick the colour (any colour) and icon for each state, choose the menu bar icon, turn the Now Playing pill off, open at login, and get automatic updates.
 
 <p align="center">
   <img src="docs/images/settings-general.png" width="400" alt="Settings, General tab">

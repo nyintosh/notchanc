@@ -2,7 +2,7 @@
 
 Menu bar app (LSUIElement, AppKit, no SwiftUI) that draws a pill beside the camera cutout while AirPods are in Noise Cancellation.
 
-- `NotchANC/App.swift`: menu, Sparkle, and `apply()`, which reacts to every UserDefaults change (keys `automatic`, `showMedia`, `hiddenDisplays`, `hideMenuBarIcon`, and per `PillMode` its `colorKey` hex and `iconKey` symbol). Reopening the app shows Settings.
+- `NotchANC/App.swift`: menu, Sparkle, and `apply()`, which reacts to every UserDefaults change (keys `automatic`, `showMedia`, `menuBarIcon`, `hiddenDisplays`, `hideMenuBarIcon`, and per `PillMode` its `colorKey` hex and `iconKey` symbol). Reopening the app shows Settings.
 - `NotchANC/Settings.swift`: Preferences window, an `NSTabViewController` (toolbar tabs) of SwiftUI forms that write UserDefaults directly.
 - `NotchANC/Overlay.swift`: `PillLayout` (pure geometry, unit-tested) and one window per shown display. The window has the expanded size; only the pill view inside animates. Beside a cutout, expanded = ANC label left, Now Playing right, both as wide as the ANC label. Without a cutout the pill is the original full marquee and hovering swaps in Now Playing at the same size. Hover uses mouse-moved event monitors. The window (a non-activating `NSPanel`) ignores clicks except while the pointer is on the pill, so right-click opens the status menu without stealing focus.
 - `NotchANC/AirPodsMonitor.swift`: parses `bluetoothd` log lines (`LsnM <mode>` etc.); no public API exists.
