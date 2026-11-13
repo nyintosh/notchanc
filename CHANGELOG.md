@@ -1,6 +1,7 @@
 # Changelog
 
 ## [1.0.5]
+- **Choose the menu bar icon** in Settings › General from ten options. While Noise Cancellation is on it shows your Noise Cancellation icon.
 - Fixed a crash when turning **Hide menu bar icon** on or off, which also closed the Settings window.
 
 ## [1.0.4]

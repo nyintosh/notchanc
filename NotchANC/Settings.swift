@@ -43,6 +43,7 @@ private struct GeneralTab: View {
     let updater: SPUUpdater
     @AppStorage("automatic") private var automatic = true
     @AppStorage("hideMenuBarIcon") private var hideIcon = false
+    @AppStorage("menuBarIcon") private var menuBarIcon = menuBarIcons[0]
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var autoUpdate: Bool
 
@@ -65,8 +66,13 @@ private struct GeneralTab: View {
                     }
             }
             LabeledContent("Menu bar icon") {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 6) {
+                    IconPicker(selection: $menuBarIcon, icons: menuBarIcons, tint: .primary)
+                        .disabled(hideIcon)
+                    Text("While Noise Cancellation is on, it shows your Noise Cancellation icon.")
+                        .font(.caption).foregroundStyle(.secondary)
                     Toggle("Hide menu bar icon", isOn: $hideIcon)
+                        .padding(.top, 4)
                     Text("Open NotchANC again to show this window.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
@@ -152,20 +158,31 @@ private struct StyleEditor: View {
                     .labelsHidden()
                     .help("Any color")
             }
-            HStack(spacing: 4) {
-                ForEach(mode.icons, id: \.self) { name in
-                    Button { icon = name } label: {
-                        Image(systemName: name)
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(tint)
-                            .frame(width: 28, height: 24)
-                            .background(icon == name ? Color.primary.opacity(0.18) : .clear, in: RoundedRectangle(cornerRadius: 6))
-                    }
-                    .buttonStyle(.plain)
-                    .focusEffectDisabled()
-                    .help(name)
-                    .accessibilityLabel(name)
+            IconPicker(selection: $icon, icons: mode.icons, tint: tint)
+        }
+    }
+}
+
+// A row of SF Symbols; the chosen one gets a subtle background.
+private struct IconPicker: View {
+    @Binding var selection: String
+    let icons: [String]
+    let tint: Color
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(icons, id: \.self) { name in
+                Button { selection = name } label: {
+                    Image(systemName: name)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(tint)
+                        .frame(width: 28, height: 24)
+                        .background(selection == name ? Color.primary.opacity(0.18) : .clear, in: RoundedRectangle(cornerRadius: 6))
                 }
+                .buttonStyle(.plain)
+                .focusEffectDisabled()
+                .help(name)
+                .accessibilityLabel(name)
             }
         }
     }

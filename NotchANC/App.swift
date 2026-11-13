@@ -29,7 +29,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ n: Notification) {
-        defaults.register(defaults: PillMode.allCases.reduce(["automatic": true, "showMedia": true]) { $0.merging($1.defaults) { a, _ in a } })
+        defaults.register(defaults: PillMode.allCases.reduce(["automatic": true, "showMedia": true, "menuBarIcon": menuBarIcons[0]]) {
+            $0.merging($1.defaults) { a, _ in a }
+        })
         // 1.0.0–1.0.3 kept one accent colour as an index into five swatches.
         if let i = defaults.object(forKey: "accentColor") as? Int {
             defaults.set(["#FF9F0A", "#30D158", "#0A84FF", "#BF5AF2", "#FF375F"][min(max(i, 0), 4)], forKey: PillMode.anc.colorKey)
@@ -122,6 +124,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let look = PillMode.allCases.flatMap { [defaults.string(forKey: $0.colorKey) ?? "", defaults.string(forKey: $0.iconKey) ?? ""] }
+            + [defaults.string(forKey: "menuBarIcon") ?? ""]
         let hidden = Set(defaults.stringArray(forKey: "hiddenDisplays") ?? [])
         if look != self.look || hidden != overlay.hiddenDisplays {
             self.look = look
@@ -137,7 +140,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func setStatusIcon(on: Bool) {
-        let img = NSImage(systemSymbolName: on ? PillMode.anc.icon : "airpodspro", accessibilityDescription: "Noise Cancellation")
+        let img = NSImage(systemSymbolName: on ? PillMode.anc.icon : defaults.string(forKey: "menuBarIcon") ?? menuBarIcons[0],
+                          accessibilityDescription: "NotchANC")
         img?.isTemplate = true
         item.button?.image = img
     }
