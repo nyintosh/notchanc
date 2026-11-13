@@ -22,7 +22,6 @@ final class NowPlaying {
     var onChange: ((Track?) -> Void)?
     private var proc: Process?
     private var buffer = Data()
-    private var running = false
 
     private let script = """
     ObjC.import("Foundation");
@@ -44,20 +43,8 @@ final class NowPlaying {
     }
     """
 
+    // Runs for the app's lifetime and restarts itself if osascript ever exits.
     func start() {
-        guard !running else { return }
-        running = true
-        launch()
-    }
-
-    func stop() {
-        running = false
-        proc?.terminationHandler = nil
-        proc?.terminate(); proc = nil
-        buffer.removeAll()
-    }
-
-    private func launch() {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
         p.arguments = ["-l", "JavaScript", "-e", script]
@@ -71,8 +58,8 @@ final class NowPlaying {
         }
         p.terminationHandler = { [weak self] _ in
             DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
-                guard let self, self.running else { return }
-                self.launch()
+                self?.buffer.removeAll()
+                self?.start()
             }
         }
         guard (try? p.run()) != nil else { return }

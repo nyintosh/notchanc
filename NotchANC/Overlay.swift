@@ -5,6 +5,7 @@
 //   Both text areas have the ANC label's width; a longer track title scrolls.
 // Without a cutout the pill keeps its full size and hovering swaps the text in place:
 //   [AirPods icon] NOISE CANCELLATION ON • NOISE CANC… [waveform]  →  [AirPods icon] Title — Artist [waveform]
+// With ANC off but media playing, the same pill shows in blue with a music note and "NOW PLAYING".
 
 import Cocoa
 
@@ -15,6 +16,13 @@ let palette: [(name: String, color: NSColor)] = [
     ("Purple", .systemPurple),
     ("Pink",   .systemPink),
 ]
+
+enum PillMode {
+    case anc, media
+
+    var label: String { self == .anc ? "NOISE CANCELLATION ON" : "NOW PLAYING" }
+    var symbol: String { self == .anc ? "airpodspro" : "music.note" }
+}
 
 // Where the pill goes on one screen. macOS reports a notch and a Dynamic Island the same way:
 // a top safe-area inset plus the unobscured areas left and right of the camera.
@@ -73,19 +81,21 @@ extension NSScreen {
 final class NotchOverlay {
     private var pills: [Pill] = []
     private var monitors: [Any] = []
-    private var visible = false
     var color: NSColor = .systemOrange
     var hiddenDisplays: Set<String> = []
     var track: Track? {
         didSet { if track != oldValue { pills.forEach { $0.setTrack(track) } } }
     }
 
-    func setVisible(_ on: Bool) {
-        visible = on
-        on ? show(animated: true) : hide()
+    // nil hides the pill. Switching between ANC and media rebuilds it in the new colour.
+    var mode: PillMode? {
+        didSet {
+            guard mode != oldValue else { return }
+            mode == nil ? hide() : show(animated: oldValue == nil)
+        }
     }
 
-    func refresh() { if visible { show(animated: false) } }
+    func refresh() { if mode != nil { show(animated: false) } }
 
     private func hide() {
         monitors.forEach(NSEvent.removeMonitor)
@@ -101,8 +111,10 @@ final class NotchOverlay {
     private func show(animated: Bool) {
         let open = Set(pills.filter(\.expanded).map(\.uuid))
         pills.forEach { $0.close() }
+        guard let mode else { return }
+        let tint = mode == .media ? NSColor.systemBlue : color
         pills = NSScreen.screens.filter { !hiddenDisplays.contains($0.uuid) }.map {
-            Pill(screen: $0, color: color, track: track, expanded: open.contains($0.uuid))
+            Pill(screen: $0, mode: mode, color: tint, track: track, expanded: open.contains($0.uuid))
         }
         for p in pills {
             p.window.alphaValue = animated ? 0 : 1
@@ -159,10 +171,12 @@ private final class Pill {
             .insetBy(dx: 0, dy: -2)   // the pointer can sit on the screen's top edge
     }
 
-    init(screen: NSScreen, color: NSColor, track: Track?, expanded: Bool) {
-        let anc = NSAttributedString(string: "NOISE CANCELLATION ON",
-                                     attributes: [.font: Self.font, .foregroundColor: color, .kern: 0.8])
-        layout = screen.pillLayout(textWidth: ceil(anc.size().width))
+    init(screen: NSScreen, mode: PillMode, color: NSColor, track: Track?, expanded: Bool) {
+        // Sized by the ANC label in both modes, so switching modes never changes the pill's size.
+        let width = NSAttributedString(string: PillMode.anc.label, attributes: [.font: Self.font, .kern: 0.8]).size().width
+        let label = NSAttributedString(string: mode.label,
+                                       attributes: [.font: Self.font, .foregroundColor: color, .kern: 0.8])
+        layout = screen.pillLayout(textWidth: ceil(width))
         uuid = screen.uuid
         scale = screen.backingScaleFactor
         self.color = color
@@ -196,13 +210,13 @@ private final class Pill {
         let cfg = NSImage.SymbolConfiguration(pointSize: 13, weight: .semibold)
         let iconY = (h - 18) / 2
 
-        let pods = NSImageView(frame: NSRect(x: 16, y: iconY, width: 20, height: 18))
-        pods.image = NSImage(systemSymbolName: "airpodspro", accessibilityDescription: "AirPods")?
+        let icon = NSImageView(frame: NSRect(x: 16, y: iconY, width: 20, height: 18))
+        icon.image = NSImage(systemSymbolName: mode.symbol, accessibilityDescription: mode.label.capitalized)?
             .withSymbolConfiguration(cfg)
-        pods.contentTintColor = color
-        pods.imageScaling = .scaleProportionallyUpOrDown
-        pods.autoresizingMask = .maxXMargin
-        body.addSubview(pods)
+        icon.contentTintColor = color
+        icon.imageScaling = .scaleProportionallyUpOrDown
+        icon.autoresizingMask = .maxXMargin
+        body.addSubview(icon)
 
         wave = NSImageView(frame: NSRect(x: layout.expanded.width - 36, y: iconY, width: 20, height: 18))
         wave.image = NSImage(systemSymbolName: "waveform", accessibilityDescription: "Media playing")?
@@ -216,7 +230,7 @@ private final class Pill {
         rightClip = Self.clip(layout.rightText, .minXMargin)
         body.addSubview(leftClip)
         body.addSubview(rightClip)
-        fill(leftClip, with: anc, alwaysScroll: !layout.hasCutout)
+        fill(leftClip, with: label, alwaysScroll: !layout.hasCutout)
 
         body.frame = expanded ? layout.expanded : layout.collapsed
         leftClip.alphaValue = layout.hasCutout == expanded ? 1 : 0

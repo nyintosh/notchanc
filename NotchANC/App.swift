@@ -14,6 +14,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var autoItem: NSMenuItem!
     private var statusLine: NSMenuItem!
     private var ancOn = false
+    private var track: Track?
+    private var hideMedia: DispatchWorkItem?
 
     static func main() {
         let app = NSApplication.shared
@@ -65,7 +67,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self, self.autoItem.state == .on, on != self.ancOn else { return }
             self.set(on)
         }
-        nowPlaying.onChange = { [weak self] track in self?.overlay.track = track }
+        nowPlaying.onChange = { [weak self] track in
+            self?.track = track
+            self?.overlay.track = track
+            self?.updatePill()
+        }
+        nowPlaying.start()   // also shows the pill for media while ANC is off
         apply()
 
         // External hook for scripts/detectors: post "notchanc.set" with object "on" or "off".
@@ -121,8 +128,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ancOn = on
         toggle.state = on ? .on : .off
         setStatusIcon(on: on)
-        overlay.setVisible(on)
-        // Only needed while the pill shows. The last track is kept, so turning back on doesn't rebuild.
-        on ? nowPlaying.start() : nowPlaying.stop()
+        updatePill()
+    }
+
+    // ANC wins; otherwise the pill shows (in blue) while media plays.
+    private func updatePill() {
+        hideMedia?.cancel()
+        let mode: PillMode? = ancOn ? .anc : (track?.playing == true ? .media : nil)
+        guard mode == nil, overlay.mode == .media else { overlay.mode = mode; return }
+        // Players report "paused" for a moment between tracks; don't flash the pill.
+        let work = DispatchWorkItem { [weak self] in self?.overlay.mode = nil }
+        hideMedia = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: work)
     }
 }
