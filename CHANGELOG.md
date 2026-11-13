@@ -1,5 +1,8 @@
 # Changelog
 
+## [1.0.3]
+- **Now Playing without ANC.** When Noise Cancellation is off but something is playing, the pill appears in blue with a music note, "Now Playing" and the moving waveform. It hides two seconds after playback stops, so it doesn't flash between tracks.
+
 ## [1.0.2]
 - Hovering opens the pill evenly on both sides: "Noise Cancellation On" on the left and the current track on the right, at the same width. Long titles scroll instead of widening the pill.
 - On displays without a notch or Dynamic Island, the pill is back to its full scrolling "Noise Cancellation On" form; hovering swaps it for the current track.
