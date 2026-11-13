@@ -113,7 +113,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func setStatusIcon(on: Bool) {
-        let img = NSImage(systemSymbolName: on ? "waveform" : "airpodspro", accessibilityDescription: "Noise Cancellation")
+        let img = NSImage(systemSymbolName: on ? "waveform.slash" : "airpodspro", accessibilityDescription: "Noise Cancellation")
         img?.isTemplate = true
         item.button?.image = img
     }
