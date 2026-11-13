@@ -4,7 +4,7 @@
 - Hovering opens the pill evenly on both sides: "Noise Cancellation On" on the left and the current track on the right, at the same width. Long titles scroll instead of widening the pill.
 
 ## [1.0.1]
-- **Hover to see Now Playing.** The pill now stays compact: AirPods icon, notch, waveform. Hover it and it slides open on both sides.
+- **Hover to see Now Playing.** The pill now stays compact: AirPods icon, notch, waveform. Hover it and the left side slides open to show the current track, or "Noise Cancellation On" when nothing is loaded.
 - The waveform moves only while media is playing.
 - **Settings window** with General, Appearance and About tabs. Choose ⌘, from the menu.
 - **Hide menu bar icon.** Open NotchANC again to bring up Settings.
