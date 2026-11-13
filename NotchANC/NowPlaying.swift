@@ -38,7 +38,10 @@ final class NowPlaying {
         title: str(info, "kMRMediaRemoteNowPlayingInfoTitle"),
         artist: str(info, "kMRMediaRemoteNowPlayingInfoArtist")
       });
-      if (s !== last) { out.writeData($(s + "\\n").dataUsingEncoding($.NSUTF8StringEncoding)); last = s; }
+      // An empty line when nothing changed: a heartbeat whose failed write ends this
+      // process within a second once NotchANC quits or crashes.
+      out.writeData($((s === last ? "" : s) + "\\n").dataUsingEncoding($.NSUTF8StringEncoding));
+      last = s;
       delay(1);
     }
     """
@@ -71,7 +74,7 @@ final class NowPlaying {
         while let nl = buffer.firstIndex(of: 0x0A) {
             let line = String(decoding: buffer[buffer.startIndex..<nl], as: UTF8.self)
             buffer.removeSubrange(buffer.startIndex...nl)
-            onChange?(Track.parse(line))
+            if !line.isEmpty { onChange?(Track.parse(line)) }
         }
     }
 }
