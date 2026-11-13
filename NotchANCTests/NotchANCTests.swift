@@ -44,16 +44,17 @@ struct LayoutTests {
     let screen = NSRect(x: 0, y: 0, width: 2056, height: 1329)
 
     // 14" MacBook Pro, measured: 2056pt wide, 38pt inset, 918pt auxiliary areas, a 220pt notch.
-    // 100pt of text: the left wing opens to 48 + 100 + 10 = 158pt.
+    // 100pt text areas: each side opens to 48 + 100 + 10 = 158pt.
     @Test func notch() {
         let l = PillLayout(screen: screen, topInset: 38,
                            leftAux: NSRect(x: 0, y: 1291, width: 918, height: 38),
                            rightAux: NSRect(x: 1138, y: 1291, width: 918, height: 38), barHeight: 24, textWidth: 100)
         #expect(l.hasCutout && l.middle == 220 && l.cutoutName == "notch")
-        #expect(l.window == NSRect(x: 918 - 158, y: 1291, width: 158 + 220 + 52, height: 38))
+        #expect(l.window == NSRect(x: 918 - 158, y: 1291, width: 158 + 220 + 158, height: 38))
         #expect(l.collapsed == NSRect(x: 158 - 52, y: 0, width: 52 + 220 + 52, height: 38))
-        #expect(l.expanded == NSRect(x: 0, y: 0, width: 430, height: 38))
-        #expect(l.text == NSRect(x: 48, y: 0, width: 100, height: 38))
+        #expect(l.expanded == NSRect(x: 0, y: 0, width: 536, height: 38))
+        #expect(l.leftText == NSRect(x: 48, y: 0, width: 100, height: 38))
+        #expect(l.rightText == NSRect(x: 536 - 148, y: 0, width: 100, height: 38))
     }
 
     @Test func island() {
@@ -71,23 +72,16 @@ struct LayoutTests {
                            rightAux: NSRect(x: 4440, y: 1262, width: 1000, height: 38), barHeight: 24, textWidth: 100)
         #expect(l.middle == 200)
         #expect(l.window.minX == CGFloat(3440 + 800 - 158))
+        #expect(l.window.maxX == CGFloat(4440 + 158))
     }
 
-    @Test func longTextIsClamped() {
-        let l = PillLayout(screen: screen, topInset: 38,
-                           leftAux: NSRect(x: 0, y: 1291, width: 918, height: 38),
-                           rightAux: NSRect(x: 1138, y: 1291, width: 918, height: 38), barHeight: 24, textWidth: 900)
-        #expect(l.text.width == PillLayout.maxText)
-        #expect(l.window.width == 48 + PillLayout.maxText + 10 + 220 + 52)
-    }
-
-    // No cutout: icons side by side when collapsed, the text between them when expanded, centred.
+    // No cutout: icons side by side when collapsed, both text areas between them when expanded, centred.
     @Test func noCutout() {
         let l = PillLayout(screen: NSRect(x: 0, y: 0, width: 3440, height: 1440), topInset: 0,
                            leftAux: .zero, rightAux: .zero, barHeight: 24, textWidth: 100)
         #expect(!l.hasCutout && l.cutoutName == nil)
-        #expect(l.window == NSRect(x: 1720 - 98, y: 1416, width: 196, height: 24))
-        #expect(l.collapsed == NSRect(x: 46, y: 0, width: 104, height: 24))
-        #expect(l.text == NSRect(x: 48, y: 0, width: 100, height: 24))
+        #expect(l.window == NSRect(x: 1720 - 158, y: 1416, width: 316, height: 24))
+        #expect(l.collapsed == NSRect(x: 106, y: 0, width: 104, height: 24))
+        #expect(l.leftText.minX == 48 && l.rightText.maxX == CGFloat(316 - 48))
     }
 }

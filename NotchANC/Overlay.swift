@@ -1,6 +1,7 @@
 // Menu-bar-height pill for AirPods Active Noise Cancellation, one per selected display.
 // Collapsed:  [AirPods icon] [ ---- camera cutout ---- ] [waveform]
-// On hover the left wing slides open to show what's playing (or "Noise Cancellation On").
+// Hovered:    [AirPods icon] NOISE CANCELLATION ON [ -- cutout -- ] Title — Artist [waveform]
+// Both text areas have the ANC label's width; a longer track title scrolls.
 
 import Cocoa
 
@@ -17,35 +18,32 @@ let palette: [(name: String, color: NSColor)] = [
 // The window always has the expanded size; only the pill inside it grows and shrinks.
 struct PillLayout: Equatable {
     static let wing: CGFloat = 52
-    static let maxText: CGFloat = 240
 
     let window: NSRect      // screen coordinates
     let collapsed: NSRect   // pill, window coordinates
     let expanded: NSRect    // pill, window coordinates
-    let text: NSRect        // text area, window coordinates
+    let leftText: NSRect    // window coordinates
+    let rightText: NSRect   // window coordinates
     let middle: CGFloat     // the cutout's width (0 without one)
     let hasCutout: Bool
 
-    init(screen: NSRect, topInset: CGFloat, leftAux: NSRect, rightAux: NSRect, barHeight: CGFloat, textWidth: CGFloat) {
+    init(screen: NSRect, topInset: CGFloat, leftAux: NSRect, rightAux: NSRect, barHeight: CGFloat, textWidth tw: CGFloat) {
         hasCutout = topInset > 0 && !leftAux.isEmpty && !rightAux.isEmpty
         let h = hasCutout ? topInset : barHeight
-        let tw = min(textWidth, Self.maxText)
         let wing = Self.wing
+        let side = 48 + tw + 10   // icon, text, gap before the middle
         if hasCutout {
             // Widths, not midX: correct for any cutout size or position.
             middle = screen.width - leftAux.width - rightAux.width
-            let left = 48 + tw + 10   // icon, text, gap before the cutout
-            window = NSRect(x: screen.minX + leftAux.width - left, y: screen.maxY - h, width: left + middle + wing, height: h)
-            collapsed = NSRect(x: left - wing, y: 0, width: 2 * wing + middle, height: h)
-            text = NSRect(x: 48, y: 0, width: tw, height: h)
+            window = NSRect(x: screen.minX + leftAux.width - side, y: screen.maxY - h, width: 2 * side + middle, height: h)
         } else {
             middle = 0
-            let width = max(96 + tw, 2 * wing)
-            window = NSRect(x: screen.midX - width / 2, y: screen.maxY - h, width: width, height: h)
-            collapsed = NSRect(x: (width - 2 * wing) / 2, y: 0, width: 2 * wing, height: h)
-            text = NSRect(x: (width - tw) / 2, y: 0, width: tw, height: h)
+            window = NSRect(x: screen.midX - side, y: screen.maxY - h, width: 2 * side, height: h)
         }
+        collapsed = NSRect(x: side - wing, y: 0, width: 2 * wing + middle, height: h)
         expanded = NSRect(origin: .zero, size: window.size)
+        leftText = NSRect(x: 48, y: 0, width: tw, height: h)
+        rightText = NSRect(x: window.width - 48 - tw, y: 0, width: tw, height: h)
     }
 
     // ponytail: guesses by width since no API names the cutout; Island Macs ship narrower than every notch (~180pt+).
@@ -74,11 +72,7 @@ final class NotchOverlay {
     var color: NSColor = .systemOrange
     var hiddenDisplays: Set<String> = []
     var track: Track? {
-        didSet {
-            guard track != oldValue else { return }
-            if track?.text != oldValue?.text { refresh() }
-            else { pills.forEach { $0.setPlaying(track?.playing == true) } }
-        }
+        didSet { if track != oldValue { pills.forEach { $0.setTrack(track) } } }
     }
 
     func setVisible(_ on: Bool) {
@@ -102,9 +96,8 @@ final class NotchOverlay {
     private func show(animated: Bool) {
         let open = Set(pills.filter(\.expanded).map(\.uuid))
         pills.forEach { $0.close() }
-        let text = message
         pills = NSScreen.screens.filter { !hiddenDisplays.contains($0.uuid) }.map {
-            Pill(screen: $0, text: text, color: color, playing: track?.playing == true, expanded: open.contains($0.uuid))
+            Pill(screen: $0, color: color, track: track, expanded: open.contains($0.uuid))
         }
         for p in pills {
             p.window.alphaValue = animated ? 0 : 1
@@ -122,12 +115,6 @@ final class NotchOverlay {
                         NSEvent.addLocalMonitorForEvents(matching: .mouseMoved) { [weak self] e in self?.hover(); return e }]
                 .compactMap { $0 }
         }
-    }
-
-    private var message: NSAttributedString {
-        let font = NSFont.systemFont(ofSize: 11, weight: .semibold)
-        return NSAttributedString(string: track?.text ?? "NOISE CANCELLATION ON",
-                                  attributes: [.font: font, .foregroundColor: color, .kern: track == nil ? 0.8 : 0])
     }
 
     private func hover() {
@@ -150,10 +137,14 @@ private final class Pill {
     let window: NSWindow
     let uuid: String
     private let layout: PillLayout
+    private let color: NSColor
+    private let scale: CGFloat
     private let body: NSView
-    private let clip: NSView
+    private let leftClip: NSView
+    private let rightClip: NSView
     private let wave: NSImageView
     private let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+    private static let font = NSFont.systemFont(ofSize: 11, weight: .semibold)
     private(set) var expanded: Bool
     var collapseTimer: Timer?
 
@@ -163,10 +154,13 @@ private final class Pill {
             .insetBy(dx: 0, dy: -2)   // the pointer can sit on the screen's top edge
     }
 
-    init(screen: NSScreen, text: NSAttributedString, color: NSColor, playing: Bool, expanded: Bool) {
-        let tw = ceil(text.size().width)
-        layout = screen.pillLayout(textWidth: tw)
+    init(screen: NSScreen, color: NSColor, track: Track?, expanded: Bool) {
+        let anc = NSAttributedString(string: "NOISE CANCELLATION ON",
+                                     attributes: [.font: Self.font, .foregroundColor: color, .kern: 0.8])
+        layout = screen.pillLayout(textWidth: ceil(anc.size().width))
         uuid = screen.uuid
+        scale = screen.backingScaleFactor
+        self.color = color
         self.expanded = expanded
         let h = layout.window.height
 
@@ -183,8 +177,9 @@ private final class Pill {
         let root = NSView(frame: NSRect(origin: .zero, size: layout.window.size))
         window.contentView = root
 
-        // Black pill flush with the cutout, bottom corners rounded. Built expanded; the
-        // autoresizing masks keep icons at the ends and the text beside the cutout as it resizes.
+        // Black pill flush with the cutout, bottom corners rounded. Built expanded; everything on
+        // the left rides the left edge and everything on the right rides the right edge, so the
+        // icons and text slide outward as it opens.
         body = NSView(frame: layout.expanded)
         body.wantsLayer = true
         body.layer!.backgroundColor = NSColor.black.cgColor
@@ -212,22 +207,41 @@ private final class Pill {
         wave.autoresizingMask = .minXMargin
         body.addSubview(wave)
 
-        clip = NSView(frame: layout.text)
-        clip.wantsLayer = true
-        clip.layer!.masksToBounds = true
-        clip.autoresizingMask = layout.hasCutout ? .minXMargin : [.minXMargin, .maxXMargin]
-        body.addSubview(clip)
-        fill(clip, with: text, width: tw, scale: screen.backingScaleFactor, color: color)
+        leftClip = Self.clip(layout.leftText, .maxXMargin)
+        rightClip = Self.clip(layout.rightText, .minXMargin)
+        body.addSubview(leftClip)
+        body.addSubview(rightClip)
+        fill(leftClip, with: anc)
 
         body.frame = expanded ? layout.expanded : layout.collapsed
-        clip.alphaValue = expanded ? 1 : 0
-        setPlaying(playing)
+        leftClip.alphaValue = expanded ? 1 : 0
+        rightClip.alphaValue = expanded ? 1 : 0
+        setTrack(track)
+    }
+
+    private static func clip(_ frame: NSRect, _ mask: NSView.AutoresizingMask) -> NSView {
+        let v = NSView(frame: frame)
+        v.wantsLayer = true
+        v.layer!.masksToBounds = true
+        v.autoresizingMask = mask
+        return v
+    }
+
+    func setTrack(_ track: Track?) {
+        let text = track.map { NSAttributedString(string: $0.text, attributes: [.font: Self.font, .foregroundColor: color]) }
+            ?? NSAttributedString(string: "Not playing", attributes: [.font: Self.font, .foregroundColor: color.withAlphaComponent(0.5)])
+        fill(rightClip, with: text)
+        setPlaying(track?.playing == true)
     }
 
     // Static text when it fits, otherwise a marquee with faded edges.
-    private func fill(_ clip: NSView, with text: NSAttributedString, width tw: CGFloat, scale: CGFloat, color: NSColor) {
+    private func fill(_ clip: NSView, with text: NSAttributedString) {
+        clip.layer!.sublayers?.forEach { $0.removeFromSuperlayer() }
+        clip.layer!.mask = nil
+        let tw = ceil(text.size().width)
         let h = clip.bounds.height
-        let scrolls = tw > clip.bounds.width && !reduceMotion
+        let overflows = tw > clip.bounds.width
+        let scrolls = overflows && !reduceMotion
         let gap: CGFloat = 30
         let copies = scrolls ? Int(ceil(clip.bounds.width / (tw + gap))) + 1 : 1
         let strip = CALayer()
@@ -247,7 +261,7 @@ private final class Pill {
             }
         }
         clip.layer!.addSublayer(strip)
-        guard tw > clip.bounds.width else { return }
+        guard overflows else { return }
         let fade = CAGradientLayer()
         fade.frame = clip.bounds
         fade.colors = [NSColor.clear.cgColor, NSColor.black.cgColor, NSColor.black.cgColor, NSColor.clear.cgColor]
@@ -274,12 +288,13 @@ private final class Pill {
             ctx.duration = reduceMotion ? 0.2 : (on ? 0.32 : 0.42)
             ctx.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 0.9, 0.25, 1)
             if !reduceMotion { body.animator().frame = target }
-            clip.animator().alphaValue = on ? 1 : 0
+            leftClip.animator().alphaValue = on ? 1 : 0
+            rightClip.animator().alphaValue = on ? 1 : 0
         }
     }
 
     // The waveform moves only while media plays.
-    func setPlaying(_ on: Bool) {
+    private func setPlaying(_ on: Bool) {
         wave.removeAllSymbolEffects()
         if on && !reduceMotion { wave.addSymbolEffect(.variableColor.iterative.reversing, options: .repeating) }
     }
