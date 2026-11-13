@@ -1,8 +1,8 @@
 # Changelog
 
 ## [1.0.3]
-- **Now Playing without ANC.** When Noise Cancellation is off but something is playing, the pill appears in blue with a music note, "Now Playing" and the moving waveform. On displays without a notch it shows the current track directly. It hides two seconds after playback stops, so it doesn't flash between tracks.
-- The Noise Cancellation pill and menu bar icon use a slashed waveform ("noise cut out") instead of the AirPods glyph.
+- **Now Playing without ANC.** When Noise Cancellation is off but something is playing, the pill appears in blue with a music note list, "Now Playing" and the moving waveform. On displays without a notch it shows the current track directly. It hides two seconds after playback stops, so it doesn't flash between tracks.
+- The Noise Cancellation pill and menu bar icon use a moon (quiet, like Do Not Disturb) instead of the AirPods glyph.
 - **Right-click the pill** for the same menu as the menu bar icon: Settings, Check for Updates, Quit and the Noise Cancellation toggles. Handy with the menu bar icon hidden. Clicking the pill never takes focus from the app you're using.
 
 ## [1.0.2]
