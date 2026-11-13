@@ -29,7 +29,7 @@ final class SettingsWindow {
     }
 
     private func tab(_ title: String, _ symbol: String, _ view: some View) -> NSTabViewItem {
-        let host = NSHostingController(rootView: view.padding(24).frame(width: 460))
+        let host = NSHostingController(rootView: view.padding(24).frame(width: 560))
         host.sizingOptions = .preferredContentSize
         host.title = title   // the window title follows the selected tab
         let item = NSTabViewItem(viewController: host)
@@ -81,25 +81,19 @@ private struct GeneralTab: View {
 }
 
 private struct AppearanceTab: View {
-    @AppStorage("accentColor") private var accent = 0
+    @AppStorage("showMedia") private var showMedia = true
     @State private var hidden = Set(UserDefaults.standard.stringArray(forKey: "hiddenDisplays") ?? [])
     @State private var screens = NSScreen.screens
 
     var body: some View {
         Form {
-            LabeledContent("Accent color") {
-                HStack(spacing: 10) {
-                    ForEach(palette.indices, id: \.self) { i in
-                        Button { accent = i } label: {
-                            Circle().fill(Color(nsColor: palette[i].color))
-                                .frame(width: 18, height: 18)
-                                .overlay { if accent == i { Circle().stroke(.primary, lineWidth: 2).padding(-3) } }
-                        }
-                        .buttonStyle(.plain)
-                        .focusEffectDisabled()
-                        .help(palette[i].name)
-                        .accessibilityLabel(palette[i].name)
-                    }
+            LabeledContent("Noise Cancellation") {
+                StyleEditor(mode: .anc)
+            }
+            LabeledContent("Now Playing") {
+                VStack(alignment: .leading, spacing: 8) {
+                    Toggle("Show while media plays through headphones", isOn: $showMedia)
+                    StyleEditor(mode: .media).disabled(!showMedia)
                 }
             }
             LabeledContent("Show on") {
@@ -123,6 +117,57 @@ private struct AppearanceTab: View {
             if on { hidden.remove(uuid) } else { hidden.insert(uuid) }
             UserDefaults.standard.set(Array(hidden), forKey: "hiddenDisplays")
         })
+    }
+}
+
+// Colour (swatches or any colour from the picker) and icon for one pill state.
+private struct StyleEditor: View {
+    let mode: PillMode
+    @AppStorage private var color: String
+    @AppStorage private var icon: String
+
+    init(mode: PillMode) {
+        self.mode = mode
+        _color = AppStorage(wrappedValue: mode.defaults[mode.colorKey] as! String, mode.colorKey)
+        _icon = AppStorage(wrappedValue: mode.defaults[mode.iconKey] as! String, mode.iconKey)
+    }
+
+    private var tint: Color { Color(nsColor: NSColor(hex: color) ?? .systemOrange) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                ForEach(presets, id: \.hex) { preset in
+                    Button { color = preset.hex } label: {
+                        Circle().fill(Color(nsColor: NSColor(hex: preset.hex)!))
+                            .frame(width: 18, height: 18)
+                            .overlay { if color == preset.hex { Circle().stroke(.primary, lineWidth: 2).padding(-3) } }
+                    }
+                    .buttonStyle(.plain)
+                    .focusEffectDisabled()
+                    .help(preset.name)
+                    .accessibilityLabel(preset.name)
+                }
+                ColorPicker("Custom color", selection: Binding(get: { tint }, set: { color = NSColor($0).hex }), supportsOpacity: false)
+                    .labelsHidden()
+                    .help("Any color")
+            }
+            HStack(spacing: 4) {
+                ForEach(mode.icons, id: \.self) { name in
+                    Button { icon = name } label: {
+                        Image(systemName: name)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(tint)
+                            .frame(width: 28, height: 24)
+                            .background(icon == name ? Color.primary.opacity(0.18) : .clear, in: RoundedRectangle(cornerRadius: 6))
+                    }
+                    .buttonStyle(.plain)
+                    .focusEffectDisabled()
+                    .help(name)
+                    .accessibilityLabel(name)
+                }
+            }
+        }
     }
 }
 

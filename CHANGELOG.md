@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.4]
+- **Customise each state.** Settings › Appearance now sets the colour and icon separately for Noise Cancellation and for Now Playing, with ten preset colours plus a picker for any colour. The menu bar icon follows the Noise Cancellation icon.
+- The blue Now Playing pill can be turned off.
+- Your previous accent colour carries over to Noise Cancellation.
+
 ## [1.0.3]
 - **Now Playing without ANC.** When Noise Cancellation is off but something is playing through headphones (AirPods, any Bluetooth headset, or the headphone jack), the pill appears in blue with a music note list, "Now Playing" and the moving waveform. On displays without a notch it shows the current track directly. It hides two seconds after playback stops, so it doesn't flash between tracks.
 - The Noise Cancellation pill and menu bar icon use a moon (quiet, like Do Not Disturb) instead of the AirPods glyph.

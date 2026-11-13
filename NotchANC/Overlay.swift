@@ -10,20 +10,46 @@
 
 import Cocoa
 
-let palette: [(name: String, color: NSColor)] = [
-    ("Orange", .systemOrange),
-    ("Green",  .systemGreen),
-    ("Blue",   .systemBlue),
-    ("Purple", .systemPurple),
-    ("Pink",   .systemPink),
+// Swatches offered in Settings; any other colour comes from the colour picker.
+let presets: [(name: String, hex: String)] = [
+    ("Orange", "#FF9F0A"), ("Yellow", "#FFD60A"), ("Green", "#30D158"), ("Mint", "#63E6E2"), ("Teal", "#40C8E0"),
+    ("Blue", "#0A84FF"), ("Indigo", "#5E5CE6"), ("Purple", "#BF5AF2"), ("Pink", "#FF375F"), ("Red", "#FF453A"),
 ]
 
-enum PillMode {
+// Each state has its own colour and icon, stored in UserDefaults (registered at launch).
+enum PillMode: CaseIterable {
     case anc, media
 
     var label: String { self == .anc ? "NOISE CANCELLATION ON" : "NOW PLAYING" }
-    // Quiet, like Do Not Disturb, versus something playing.
-    var symbol: String { self == .anc ? "moon.fill" : "music.note.list" }
+    var colorKey: String { self == .anc ? "ancColor" : "mediaColor" }
+    var iconKey: String { self == .anc ? "ancIcon" : "mediaIcon" }
+    var defaults: [String: Any] {
+        self == .anc ? [colorKey: "#FF9F0A", iconKey: "moon.fill"] : [colorKey: "#0A84FF", iconKey: "music.note.list"]
+    }
+    // ANC: quiet, blocked out. Media: something playing.
+    var icons: [String] {
+        self == .anc
+            ? ["moon.fill", "moon.zzz.fill", "waveform.slash", "shield.lefthalf.filled", "ear.badge.waveform",
+               "headphones", "airpodspro", "speaker.slash.fill", "bell.slash.fill", "leaf.fill"]
+            : ["music.note.list", "music.note", "music.quarternote.3", "play.fill", "play.circle",
+               "waveform", "speaker.wave.2.fill", "headphones", "hifispeaker.fill", "radio.fill"]
+    }
+
+    var color: NSColor { NSColor(hex: UserDefaults.standard.string(forKey: colorKey) ?? "") ?? .systemOrange }
+    var icon: String { UserDefaults.standard.string(forKey: iconKey) ?? "" }
+}
+
+extension NSColor {
+    convenience init?(hex: String) {
+        guard hex.count == 7, hex.hasPrefix("#"), let v = UInt32(hex.dropFirst(), radix: 16) else { return nil }
+        self.init(srgbRed: CGFloat(v >> 16 & 0xFF) / 255, green: CGFloat(v >> 8 & 0xFF) / 255, blue: CGFloat(v & 0xFF) / 255, alpha: 1)
+    }
+
+    var hex: String {
+        let c = usingColorSpace(.sRGB) ?? self
+        let byte = { (x: CGFloat) in Int((min(max(x, 0), 1) * 255).rounded()) }
+        return String(format: "#%02X%02X%02X", byte(c.redComponent), byte(c.greenComponent), byte(c.blueComponent))
+    }
 }
 
 // Where the pill goes on one screen. macOS reports a notch and a Dynamic Island the same way:
@@ -83,7 +109,6 @@ extension NSScreen {
 final class NotchOverlay {
     private var pills: [Pill] = []
     private var monitors: [Any] = []
-    var color: NSColor = .systemOrange
     var hiddenDisplays: Set<String> = []
     var menu: NSMenu?   // right-click menu, the same one the menu bar icon shows
     var track: Track? {
@@ -115,9 +140,8 @@ final class NotchOverlay {
         let open = Set(pills.filter(\.expanded).map(\.uuid))
         pills.forEach { $0.close() }
         guard let mode else { return }
-        let tint = mode == .media ? NSColor.systemBlue : color
         pills = NSScreen.screens.filter { !hiddenDisplays.contains($0.uuid) }.map {
-            Pill(screen: $0, mode: mode, color: tint, track: track, expanded: open.contains($0.uuid), menu: menu)
+            Pill(screen: $0, mode: mode, color: mode.color, track: track, expanded: open.contains($0.uuid), menu: menu)
         }
         for p in pills {
             p.window.alphaValue = animated ? 0 : 1
@@ -223,7 +247,7 @@ private final class Pill {
         let iconY = (h - 18) / 2
 
         let icon = NSImageView(frame: NSRect(x: 16, y: iconY, width: 20, height: 18))
-        icon.image = NSImage(systemSymbolName: mode.symbol, accessibilityDescription: mode.label.capitalized)?
+        icon.image = NSImage(systemSymbolName: mode.icon, accessibilityDescription: mode.label.capitalized)?
             .withSymbolConfiguration(cfg)
         icon.contentTintColor = color
         icon.imageScaling = .scaleProportionallyUpOrDown
