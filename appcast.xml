@@ -3,6 +3,14 @@
     <channel>
         <title>NotchANC</title>
         <item>
+            <title>1.0.5</title>
+            <pubDate>Fri, 13 Nov 2026 20:36:30 +0700</pubDate>
+            <sparkle:version>24</sparkle:version>
+            <sparkle:shortVersionString>1.0.5</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/nyintosh/notchanc/releases/download/v1.0.5/NotchANC-1.0.5.dmg" length="1945347" type="application/octet-stream" sparkle:edSignature="Pq7NUhB/KySaqij/ZAr01k7sFU4quAl+5IjeoDquNTfiZwNdxdqgVFQjE5Zfr5YqEqeq50+90b/nnLbTHm15Dg=="/>
+        </item>
+        <item>
             <title>1.0.4</title>
             <pubDate>Fri, 13 Nov 2026 20:27:37 +0700</pubDate>
             <sparkle:version>21</sparkle:version>
@@ -17,14 +25,6 @@
             <sparkle:shortVersionString>1.0.3</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <enclosure url="https://github.com/nyintosh/notchanc/releases/download/v1.0.3/NotchANC-1.0.3.dmg" length="1933732" type="application/octet-stream" sparkle:edSignature="e6khvhnKQX4LEx9og+pvWBeUGSmMCFnMk6bqKPIUioF99Gu0IBqLFtwpDUzgxt8r3+3KdJjWMTnzfTtMYLlGDA=="/>
-        </item>
-        <item>
-            <title>1.0.2</title>
-            <pubDate>Fri, 13 Nov 2026 19:49:35 +0700</pubDate>
-            <sparkle:version>10</sparkle:version>
-            <sparkle:shortVersionString>1.0.2</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/nyintosh/notchanc/releases/download/v1.0.2/NotchANC-1.0.2.dmg" length="1933570" type="application/octet-stream" sparkle:edSignature="iTkbvJKbmtgXlrKOiG4PNPk4a/ppNXrBen6Ud06yFK6RHDWVgVRAn1NokPhNaBjYAO71u86mvb/VA95UXdOjDg=="/>
         </item>
     </channel>
 </rss>
