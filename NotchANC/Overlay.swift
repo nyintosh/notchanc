@@ -238,8 +238,13 @@ private final class Pill {
     private func fill(_ clip: NSView, with text: NSAttributedString) {
         clip.layer!.sublayers?.forEach { $0.removeFromSuperlayer() }
         clip.layer!.mask = nil
-        let tw = ceil(text.size().width)
+        // Core Text measures fallback fonts too (Myanmar needs ~24pt, Latin 13pt); NSAttributedString.size()
+        // doesn't. Every string sits on the baseline that centres Latin text, so both sides line up.
+        let line = CTLineCreateWithAttributedString(text)
+        var ascent: CGFloat = 0, descent: CGFloat = 0
+        let tw = ceil(CTLineGetTypographicBounds(line, &ascent, &descent, nil))
         let h = clip.bounds.height
+        let baseline = (h - Self.font.ascender + Self.font.descender) / 2 - Self.font.descender
         let overflows = tw > clip.bounds.width
         let scrolls = overflows && !reduceMotion
         let gap: CGFloat = 30
@@ -250,7 +255,7 @@ private final class Pill {
             let t = CATextLayer()
             t.string = text
             t.contentsScale = scale
-            t.frame = CGRect(x: (tw + gap) * CGFloat(i), y: (h - 14) / 2, width: tw + 2, height: 14)
+            t.frame = CGRect(x: (tw + gap) * CGFloat(i), y: baseline - descent, width: tw + 2, height: ceil(ascent + descent))
             strip.addSublayer(t)
             if scrolls {   // separator dot in the gap between repeats
                 let d = CALayer()
