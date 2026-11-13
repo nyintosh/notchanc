@@ -22,6 +22,7 @@ final class NowPlaying {
     var onChange: ((Track?) -> Void)?
     private var proc: Process?
     private var buffer = Data()
+    private var retry: TimeInterval = 5   // doubles while osascript keeps failing (e.g. an older macOS), up to 5 minutes
 
     private let script = """
     ObjC.import("Foundation");
@@ -60,9 +61,13 @@ final class NowPlaying {
             DispatchQueue.main.async { self?.consume(d) }
         }
         p.terminationHandler = { [weak self] _ in
-            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
-                self?.buffer.removeAll()
-                self?.start()
+            DispatchQueue.main.async {
+                guard let self else { return }
+                DispatchQueue.main.asyncAfter(deadline: .now() + self.retry) {
+                    self.buffer.removeAll()
+                    self.start()
+                }
+                self.retry = min(self.retry * 2, 300)
             }
         }
         guard (try? p.run()) != nil else { return }
@@ -74,6 +79,7 @@ final class NowPlaying {
         while let nl = buffer.firstIndex(of: 0x0A) {
             let line = String(decoding: buffer[buffer.startIndex..<nl], as: UTF8.self)
             buffer.removeSubrange(buffer.startIndex...nl)
+            retry = 5   // it's working
             if !line.isEmpty { onChange?(Track.parse(line)) }
         }
     }
