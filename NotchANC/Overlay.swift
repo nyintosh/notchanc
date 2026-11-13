@@ -85,6 +85,7 @@ final class NotchOverlay {
     private var monitors: [Any] = []
     var color: NSColor = .systemOrange
     var hiddenDisplays: Set<String> = []
+    var menu: NSMenu?   // right-click menu, the same one the menu bar icon shows
     var track: Track? {
         didSet { if track != oldValue { pills.forEach { $0.setTrack(track) } } }
     }
@@ -116,7 +117,7 @@ final class NotchOverlay {
         guard let mode else { return }
         let tint = mode == .media ? NSColor.systemBlue : color
         pills = NSScreen.screens.filter { !hiddenDisplays.contains($0.uuid) }.map {
-            Pill(screen: $0, mode: mode, color: tint, track: track, expanded: open.contains($0.uuid))
+            Pill(screen: $0, mode: mode, color: tint, track: track, expanded: open.contains($0.uuid), menu: menu)
         }
         for p in pills {
             p.window.alphaValue = animated ? 0 : 1
@@ -139,7 +140,10 @@ final class NotchOverlay {
     private func hover() {
         let mouse = NSEvent.mouseLocation
         for p in pills {
-            if p.hitRect.contains(mouse) {
+            let inside = p.hitRect.contains(mouse)
+            // Clicks pass through to the menu bar, except while the pointer is on the pill (right-click menu).
+            if p.window.ignoresMouseEvents == inside { p.window.ignoresMouseEvents = !inside }
+            if inside {
                 p.collapseTimer?.invalidate(); p.collapseTimer = nil
                 if !p.expanded { p.setExpanded(true) }
             } else if p.expanded, p.collapseTimer == nil {
@@ -174,7 +178,7 @@ private final class Pill {
             .insetBy(dx: 0, dy: -2)   // the pointer can sit on the screen's top edge
     }
 
-    init(screen: NSScreen, mode: PillMode, color: NSColor, track: Track?, expanded: Bool) {
+    init(screen: NSScreen, mode: PillMode, color: NSColor, track: Track?, expanded: Bool, menu: NSMenu?) {
         // Sized by the ANC label in both modes, so switching modes never changes the pill's size.
         let width = NSAttributedString(string: PillMode.anc.label, attributes: [.font: Self.font, .kern: 0.8]).size().width
         let label = NSAttributedString(string: mode.label,
@@ -187,7 +191,10 @@ private final class Pill {
         fixed = !layout.hasCutout && mode == .media
         let h = layout.window.height
 
-        window = NSWindow(contentRect: layout.window, styleMask: .borderless, backing: .buffered, defer: false)
+        // A non-activating panel: clicking the pill never takes focus from the app in front.
+        let panel = NSPanel(contentRect: layout.window, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        panel.hidesOnDeactivate = false
+        window = panel
         window.isOpaque = false
         window.backgroundColor = .clear
         window.hasShadow = false
@@ -198,6 +205,7 @@ private final class Pill {
         window.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
         if layout.hasCutout { window.collectionBehavior.insert(.fullScreenAuxiliary) }
         let root = NSView(frame: NSRect(origin: .zero, size: layout.window.size))
+        root.menu = menu
         window.contentView = root
 
         // Black pill flush with the cutout, bottom corners rounded. Built expanded; everything on
