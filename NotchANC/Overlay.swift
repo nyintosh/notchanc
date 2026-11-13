@@ -33,13 +33,12 @@ struct PillLayout: Equatable {
     init(screen: NSRect, topInset: CGFloat, leftAux: NSRect, rightAux: NSRect, barHeight: CGFloat, textWidth tw: CGFloat) {
         hasCutout = topInset > 0 && !leftAux.isEmpty && !rightAux.isEmpty
         let h = hasCutout ? topInset : barHeight
-        let wing = Self.wing
         if hasCutout {
             // Widths, not midX: correct for any cutout size or position.
             middle = screen.width - leftAux.width - rightAux.width
             let side = 48 + tw + 10   // icon, text, gap before the cutout
             window = NSRect(x: screen.minX + leftAux.width - side, y: screen.maxY - h, width: 2 * side + middle, height: h)
-            collapsed = NSRect(x: side - wing, y: 0, width: 2 * wing + middle, height: h)
+            collapsed = NSRect(x: side - Self.wing, y: 0, width: 2 * Self.wing + middle, height: h)
             leftText = NSRect(x: 48, y: 0, width: tw, height: h)
             rightText = NSRect(x: window.width - 48 - tw, y: 0, width: tw, height: h)
         } else {
