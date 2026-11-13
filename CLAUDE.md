@@ -4,7 +4,7 @@ Menu bar app (LSUIElement, AppKit, no SwiftUI) that draws a pill beside the came
 
 - `NotchANC/App.swift`: menu, Sparkle, and `apply()`, which reacts to every UserDefaults change (keys `automatic`, `accentColor`, `hiddenDisplays`, `hideMenuBarIcon`). Reopening the app shows Settings.
 - `NotchANC/Settings.swift`: Preferences window, an `NSTabViewController` (toolbar tabs) of SwiftUI forms that write UserDefaults directly.
-- `NotchANC/Overlay.swift`: `PillLayout` (pure geometry, unit-tested) and one window per shown display. The window has the expanded size; only the pill view inside animates. Hover uses mouse-moved event monitors, so the window keeps ignoring clicks.
+- `NotchANC/Overlay.swift`: `PillLayout` (pure geometry, unit-tested) and one window per shown display. The window has the expanded size; only the pill view inside animates. Expanded: ANC label left, Now Playing right, both as wide as the ANC label. Hover uses mouse-moved event monitors, so the window keeps ignoring clicks.
 - `NotchANC/AirPodsMonitor.swift`: parses `bluetoothd` log lines (`LsnM <mode>` etc.); no public API exists.
 - `NotchANC/NowPlaying.swift`: MediaRemote refuses non-Apple processes since macOS 15.4, so a JXA loop in Apple's `/usr/bin/osascript` reads `MRNowPlayingRequest` and prints JSON lines. Runs only while the pill shows.
 
