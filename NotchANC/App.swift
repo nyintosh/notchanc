@@ -17,8 +17,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var ancOn = false
     private var track: Track?
     private var hideMedia: DispatchWorkItem?
-    private var look: [String] = []
-    private var showMedia = true   // every state's colour and icon, to notice changes
+    private var look: [String] = []   // every state's colour and icon, to notice changes
+    private var showMedia = true
+    private var iconHidden = false
 
     static func main() {
         let app = NSApplication.shared
@@ -101,7 +102,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // Idempotent: UserDefaults notifies for every write, including Sparkle's own bookkeeping.
     private func apply() {
-        item.isVisible = !defaults.bool(forKey: "hideMenuBarIcon")
+        // Changing isVisible makes AppKit write UserDefaults, which re-enters apply() before the change lands.
+        // Compare against our own copy, set first, so the re-entrant call does nothing.
+        let hide = defaults.bool(forKey: "hideMenuBarIcon")
+        if hide != iconHidden {
+            iconHidden = hide
+            item.isVisible = !hide
+        }
 
         let automatic = defaults.bool(forKey: "automatic")
         if (autoItem.state == .on) != automatic {

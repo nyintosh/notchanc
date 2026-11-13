@@ -1,5 +1,8 @@
 # Changelog
 
+## [1.0.5]
+- Fixed a crash when turning **Hide menu bar icon** on or off, which also closed the Settings window.
+
 ## [1.0.4]
 - **Customise each state.** Settings › Appearance now sets the colour and icon separately for Noise Cancellation and for Now Playing, with ten preset colours plus a picker for any colour. The menu bar icon follows the Noise Cancellation icon.
 - The blue Now Playing pill can be turned off.
