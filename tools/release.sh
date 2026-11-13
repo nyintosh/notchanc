@@ -40,6 +40,6 @@ spctl -a -vv -t install "$DMG"
 
 git add appcast.xml
 git commit -m "Release $V"
-git tag "v$V"
+git tag -s -m "NotchANC $V" "v$V"
 git push origin main "v$V"
 gh release create "v$V" "$DMG" --title "NotchANC $V" --notes-file <(awk "/^## \\[$V\\]/{f=1;next} /^## /{f=0} f" CHANGELOG.md)

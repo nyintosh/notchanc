@@ -2,9 +2,11 @@
 
 Menu bar app (LSUIElement, AppKit, no SwiftUI) that draws a pill beside the camera cutout while AirPods are in Noise Cancellation.
 
-- `NotchANC/App.swift`: menu, settings (UserDefaults keys `automatic`, `accentColor`, `hiddenDisplays`), Sparkle.
-- `NotchANC/Overlay.swift`: `PillLayout` (pure geometry, unit-tested) and one window per shown display.
+- `NotchANC/App.swift`: menu, Sparkle, and `apply()`, which reacts to every UserDefaults change (keys `automatic`, `accentColor`, `hiddenDisplays`, `hideMenuBarIcon`). Reopening the app shows Settings.
+- `NotchANC/Settings.swift`: Preferences window, an `NSTabViewController` (toolbar tabs) of SwiftUI forms that write UserDefaults directly.
+- `NotchANC/Overlay.swift`: `PillLayout` (pure geometry, unit-tested) and one window per shown display. The window has the expanded size; only the pill view inside animates. Hover uses mouse-moved event monitors, so the window keeps ignoring clicks.
 - `NotchANC/AirPodsMonitor.swift`: parses `bluetoothd` log lines (`LsnM <mode>` etc.); no public API exists.
+- `NotchANC/NowPlaying.swift`: MediaRemote refuses non-Apple processes since macOS 15.4, so a JXA loop in Apple's `/usr/bin/osascript` reads `MRNowPlayingRequest` and prints JSON lines. Runs only while the pill shows.
 
 ## Facts that are easy to get wrong
 - Notch and Dynamic Island (PROLED XDR MacBook Pro, Oct 2026) both report through `safeAreaInsets.top` and `auxiliaryTopLeft/RightArea`. ActivityKit and WidgetKit `DynamicIsland` are unavailable on macOS (27.2 SDK), so apps cannot draw inside the island. `cutoutName` guesses notch versus island by width, which only affects the menu label.
@@ -13,6 +15,6 @@ Menu bar app (LSUIElement, AppKit, no SwiftUI) that draws a pill beside the came
 - Minimum macOS is 14. Don't add `#available` branches.
 
 ## Build, test, release
-- Test: `xcodebuild -scheme NotchANC -derivedDataPath build/dd test`.
-- Release: `tools/release.sh VERSION`. It archives, exports with Developer ID (team BC8RBD2A8Y), notarizes with the App Store Connect API key, staples a DMG, appends to `appcast.xml` (Sparkle key account `notchanc` in the login keychain), tags, pushes and creates the GitHub release. Add the version's notes to `CHANGELOG.md` first.
+- Test: `xcodebuild -scheme NotchANC -derivedDataPath build/test test`. Never test in a folder whose app was launched: macOS App Management then blocks writes into that signed bundle.
+- Release: `tools/release.sh VERSION`. It archives, exports with Developer ID (team BC8RBD2A8Y), notarizes with the App Store Connect API key, staples a DMG, appends to `appcast.xml` (Sparkle key account `notchanc` in the login keychain), tags, pushes and creates the GitHub release. Add the version's notes to `CHANGELOG.md` first. Commits and tags are SSH-signed with `~/.ssh/nyintosh` as `56629705+nyintosh@users.noreply.github.com`; never add a co-author line.
 - GitHub: `nyintosh/notchanc` (public). Push with `~/.ssh/nyintosh` (repo `core.sshCommand`).
