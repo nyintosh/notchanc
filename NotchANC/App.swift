@@ -6,6 +6,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let overlay = NotchOverlay()
     private let monitor = AirPodsMonitor()
     private let nowPlaying = NowPlaying()
+    private let output = AudioOutput()
     private let updater = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
     private lazy var settings = SettingsWindow(updater: updater.updater)
     private let defaults = UserDefaults.standard
@@ -74,6 +75,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.updatePill()
         }
         nowPlaying.start()   // also shows the pill for media while ANC is off
+        output.onChange = { [weak self] in self?.updatePill() }
+        output.start()
         apply()
 
         // External hook for scripts/detectors: post "notchanc.set" with object "on" or "off".
@@ -132,10 +135,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updatePill()
     }
 
-    // ANC wins; otherwise the pill shows (in blue) while media plays.
+    // ANC wins; otherwise the pill shows (in blue) while media plays into headphones.
     private func updatePill() {
         hideMedia?.cancel()
-        let mode: PillMode? = ancOn ? .anc : (track?.playing == true ? .media : nil)
+        let mode: PillMode? = ancOn ? .anc : (track?.playing == true && output.toHeadphones ? .media : nil)
         guard mode == nil, overlay.mode == .media else { overlay.mode = mode; return }
         // Players report "paused" for a moment between tracks; don't flash the pill.
         let work = DispatchWorkItem { [weak self] in self?.overlay.mode = nil }
