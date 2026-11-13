@@ -51,6 +51,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(update)
         menu.addItem(NSMenuItem(title: "Quit NotchANC", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         item.menu = menu
+        overlay.menu = menu
 
         NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification,
                                                object: nil, queue: .main) { [weak self] _ in

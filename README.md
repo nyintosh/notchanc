@@ -7,6 +7,7 @@ A menu bar app that shows a black pill around your MacBook's notch, or its Dynam
 - **Media without ANC.** With Noise Cancellation off, the pill still appears in blue while something is playing. On displays without a notch it shows the track directly.
 - **Any display.** It hugs the camera cutout on notch and Dynamic Island MacBooks and sits centred on other displays. Choose displays in **Settings › Appearance**.
 - **Out of the way.** Clicks pass through the pill. On displays without a cutout, it hides while a full-screen app is in front.
+- **Right-click the pill** for Settings, Check for Updates and Quit.
 - **Settings** has accent colours, Open at Login, automatic updates and **Hide menu bar icon**. With the icon hidden, open NotchANC again to reach Settings.
 
 Requires macOS 14 or later. Download the latest DMG from [Releases](https://github.com/nyintosh/notchanc/releases).
