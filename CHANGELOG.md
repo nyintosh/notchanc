@@ -2,6 +2,7 @@
 
 ## [1.0.2]
 - Hovering opens the pill evenly on both sides: "Noise Cancellation On" on the left and the current track on the right, at the same width. Long titles scroll instead of widening the pill.
+- On displays without a notch or Dynamic Island, the pill is back to its full scrolling "Noise Cancellation On" form; hovering swaps it for the current track.
 - Titles in Myanmar, Thai and other tall scripts are no longer cut off at the bottom.
 
 ## [1.0.1]
