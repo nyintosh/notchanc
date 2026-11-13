@@ -1,7 +1,10 @@
 // Menu-bar-height pill for AirPods Active Noise Cancellation, one per selected display.
-// Collapsed:  [AirPods icon] [ ---- camera cutout ---- ] [waveform]
-// Hovered:    [AirPods icon] NOISE CANCELLATION ON [ -- cutout -- ] Title — Artist [waveform]
-// Both text areas have the ANC label's width; a longer track title scrolls.
+// Beside a camera cutout (notch or Dynamic Island):
+//   Collapsed:  [AirPods icon] [ ---- cutout ---- ] [waveform]
+//   Hovered:    [AirPods icon] NOISE CANCELLATION ON [ -- cutout -- ] Title — Artist [waveform]
+//   Both text areas have the ANC label's width; a longer track title scrolls.
+// Without a cutout the pill keeps its full size and hovering swaps the text in place:
+//   [AirPods icon] NOISE CANCELLATION ON • NOISE CANC… [waveform]  →  [AirPods icon] Title — Artist [waveform]
 
 import Cocoa
 
@@ -31,19 +34,22 @@ struct PillLayout: Equatable {
         hasCutout = topInset > 0 && !leftAux.isEmpty && !rightAux.isEmpty
         let h = hasCutout ? topInset : barHeight
         let wing = Self.wing
-        let side = 48 + tw + 10   // icon, text, gap before the middle
         if hasCutout {
             // Widths, not midX: correct for any cutout size or position.
             middle = screen.width - leftAux.width - rightAux.width
+            let side = 48 + tw + 10   // icon, text, gap before the cutout
             window = NSRect(x: screen.minX + leftAux.width - side, y: screen.maxY - h, width: 2 * side + middle, height: h)
+            collapsed = NSRect(x: side - wing, y: 0, width: 2 * wing + middle, height: h)
+            leftText = NSRect(x: 48, y: 0, width: tw, height: h)
+            rightText = NSRect(x: window.width - 48 - tw, y: 0, width: tw, height: h)
         } else {
             middle = 0
-            window = NSRect(x: screen.midX - side, y: screen.maxY - h, width: 2 * side, height: h)
+            window = NSRect(x: screen.midX - 193, y: screen.maxY - h, width: 386, height: h)
+            collapsed = NSRect(origin: .zero, size: window.size)
+            leftText = NSRect(x: 48, y: 0, width: 290, height: h)
+            rightText = leftText   // same place: hovering swaps one for the other
         }
-        collapsed = NSRect(x: side - wing, y: 0, width: 2 * wing + middle, height: h)
         expanded = NSRect(origin: .zero, size: window.size)
-        leftText = NSRect(x: 48, y: 0, width: tw, height: h)
-        rightText = NSRect(x: window.width - 48 - tw, y: 0, width: tw, height: h)
     }
 
     // ponytail: guesses by width since no API names the cutout; Island Macs ship narrower than every notch (~180pt+).
@@ -211,10 +217,10 @@ private final class Pill {
         rightClip = Self.clip(layout.rightText, .minXMargin)
         body.addSubview(leftClip)
         body.addSubview(rightClip)
-        fill(leftClip, with: anc)
+        fill(leftClip, with: anc, alwaysScroll: !layout.hasCutout)
 
         body.frame = expanded ? layout.expanded : layout.collapsed
-        leftClip.alphaValue = expanded ? 1 : 0
+        leftClip.alphaValue = layout.hasCutout == expanded ? 1 : 0
         rightClip.alphaValue = expanded ? 1 : 0
         setTrack(track)
     }
@@ -235,7 +241,7 @@ private final class Pill {
     }
 
     // Static text when it fits, otherwise a marquee with faded edges.
-    private func fill(_ clip: NSView, with text: NSAttributedString) {
+    private func fill(_ clip: NSView, with text: NSAttributedString, alwaysScroll: Bool = false) {
         clip.layer!.sublayers?.forEach { $0.removeFromSuperlayer() }
         clip.layer!.mask = nil
         // Core Text measures fallback fonts too (Myanmar needs ~24pt, Latin 13pt); NSAttributedString.size()
@@ -246,11 +252,12 @@ private final class Pill {
         let h = clip.bounds.height
         let baseline = (h - Self.font.ascender + Self.font.descender) / 2 - Self.font.descender
         let overflows = tw > clip.bounds.width
-        let scrolls = overflows && !reduceMotion
+        let scrolls = (overflows || alwaysScroll) && !reduceMotion
         let gap: CGFloat = 30
         let copies = scrolls ? Int(ceil(clip.bounds.width / (tw + gap))) + 1 : 1
         let strip = CALayer()
-        strip.frame = CGRect(x: 0, y: 0, width: (tw + gap) * CGFloat(copies), height: h)
+        strip.frame = CGRect(x: overflows || scrolls ? 0 : (clip.bounds.width - tw) / 2, y: 0,
+                             width: (tw + gap) * CGFloat(copies), height: h)
         for i in 0..<copies {
             let t = CATextLayer()
             t.string = text
@@ -266,7 +273,7 @@ private final class Pill {
             }
         }
         clip.layer!.addSublayer(strip)
-        guard overflows else { return }
+        guard overflows || scrolls else { return }
         let fade = CAGradientLayer()
         fade.frame = clip.bounds
         fade.colors = [NSColor.clear.cgColor, NSColor.black.cgColor, NSColor.black.cgColor, NSColor.clear.cgColor]
@@ -293,7 +300,7 @@ private final class Pill {
             ctx.duration = reduceMotion ? 0.2 : (on ? 0.32 : 0.42)
             ctx.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 0.9, 0.25, 1)
             if !reduceMotion { body.animator().frame = target }
-            leftClip.animator().alphaValue = on ? 1 : 0
+            leftClip.animator().alphaValue = layout.hasCutout == on ? 1 : 0
             rightClip.animator().alphaValue = on ? 1 : 0
         }
     }

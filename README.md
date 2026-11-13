@@ -3,7 +3,7 @@
 A menu bar app that shows a black pill around your MacBook's notch, or its Dynamic Island, while your AirPods are in Noise Cancellation.
 
 - **Automatic.** NotchANC reads the AirPods listening mode from the system log, which needs no setup.
-- **Now Playing.** Hover the pill and it slides open: Noise Cancellation on the left, what's playing on the right. The waveform moves only while media plays.
+- **Now Playing.** Beside a notch or Dynamic Island, hover the pill and it slides open: Noise Cancellation on the left, what's playing on the right. On other displays the pill scrolls "Noise Cancellation On" and hovering shows what's playing. The waveform moves only while media plays.
 - **Any display.** It hugs the camera cutout on notch and Dynamic Island MacBooks and sits centred on other displays. Choose displays in **Settings › Appearance**.
 - **Out of the way.** Clicks pass through the pill. On displays without a cutout, it hides while a full-screen app is in front.
 - **Settings** has accent colours, Open at Login, automatic updates and **Hide menu bar icon**. With the icon hidden, open NotchANC again to reach Settings.

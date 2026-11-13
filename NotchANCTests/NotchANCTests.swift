@@ -75,13 +75,13 @@ struct LayoutTests {
         #expect(l.window.maxX == CGFloat(4440 + 158))
     }
 
-    // No cutout: icons side by side when collapsed, both text areas between them when expanded, centred.
+    // No cutout: the original full pill, the same size collapsed and hovered, text between the icons.
     @Test func noCutout() {
         let l = PillLayout(screen: NSRect(x: 0, y: 0, width: 3440, height: 1440), topInset: 0,
                            leftAux: .zero, rightAux: .zero, barHeight: 24, textWidth: 100)
         #expect(!l.hasCutout && l.cutoutName == nil)
-        #expect(l.window == NSRect(x: 1720 - 158, y: 1416, width: 316, height: 24))
-        #expect(l.collapsed == NSRect(x: 106, y: 0, width: 104, height: 24))
-        #expect(l.leftText.minX == 48 && l.rightText.maxX == CGFloat(316 - 48))
+        #expect(l.window == NSRect(x: 1720 - 193, y: 1416, width: 48 + 290 + 48, height: 24))
+        #expect(l.collapsed == l.expanded)
+        #expect(l.leftText == NSRect(x: 48, y: 0, width: 290, height: 24) && l.rightText == l.leftText)
     }
 }
