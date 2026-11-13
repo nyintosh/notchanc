@@ -17,6 +17,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var ancOn = false
     private var track: Track?
     private var hideMedia: DispatchWorkItem?
+    private var look: [String] = []
+    private var showMedia = true   // every state's colour and icon, to notice changes
 
     static func main() {
         let app = NSApplication.shared
@@ -26,7 +28,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ n: Notification) {
-        defaults.register(defaults: ["automatic": true])
+        defaults.register(defaults: PillMode.allCases.reduce(["automatic": true, "showMedia": true]) { $0.merging($1.defaults) { a, _ in a } })
+        // 1.0.0–1.0.3 kept one accent colour as an index into five swatches.
+        if let i = defaults.object(forKey: "accentColor") as? Int {
+            defaults.set(["#FF9F0A", "#30D158", "#0A84FF", "#BF5AF2", "#FF375F"][min(max(i, 0), 4)], forKey: PillMode.anc.colorKey)
+            defaults.removeObject(forKey: "accentColor")
+        }
 
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         setStatusIcon(on: false)
@@ -107,17 +114,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        let color = palette[min(max(defaults.integer(forKey: "accentColor"), 0), palette.count - 1)].color
+        let look = PillMode.allCases.flatMap { [defaults.string(forKey: $0.colorKey) ?? "", defaults.string(forKey: $0.iconKey) ?? ""] }
         let hidden = Set(defaults.stringArray(forKey: "hiddenDisplays") ?? [])
-        if color != overlay.color || hidden != overlay.hiddenDisplays {
-            overlay.color = color
+        if look != self.look || hidden != overlay.hiddenDisplays {
+            self.look = look
             overlay.hiddenDisplays = hidden
             overlay.refresh()
+            setStatusIcon(on: ancOn)
+        }
+
+        if showMedia != defaults.bool(forKey: "showMedia") {
+            showMedia.toggle()
+            updatePill()
         }
     }
 
     private func setStatusIcon(on: Bool) {
-        let img = NSImage(systemSymbolName: on ? "moon.fill" : "airpodspro", accessibilityDescription: "Noise Cancellation")
+        let img = NSImage(systemSymbolName: on ? PillMode.anc.icon : "airpodspro", accessibilityDescription: "Noise Cancellation")
         img?.isTemplate = true
         item.button?.image = img
     }
@@ -135,10 +148,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updatePill()
     }
 
-    // ANC wins; otherwise the pill shows (in blue) while media plays into headphones.
+    // ANC wins; otherwise the pill shows while media plays into headphones (unless turned off in Settings).
     private func updatePill() {
         hideMedia?.cancel()
-        let mode: PillMode? = ancOn ? .anc : (track?.playing == true && output.toHeadphones ? .media : nil)
+        let mode: PillMode? = ancOn ? .anc : (showMedia && track?.playing == true && output.toHeadphones ? .media : nil)
         guard mode == nil, overlay.mode == .media else { overlay.mode = mode; return }
         // Players report "paused" for a moment between tracks; don't flash the pill.
         let work = DispatchWorkItem { [weak self] in self?.overlay.mode = nil }

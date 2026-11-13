@@ -40,6 +40,13 @@ struct NowPlayingTests {
     }
 }
 
+struct ColorTests {
+    @Test func hexRoundTrip() {
+        for hex in ["#FF9F0A", "#0A84FF", "#000000", "#FFFFFF"] { #expect(NSColor(hex: hex)?.hex == hex) }
+        #expect(NSColor(hex: "FF9F0A") == nil && NSColor(hex: "#GGGGGG") == nil && NSColor(hex: "") == nil)
+    }
+}
+
 struct LayoutTests {
     let screen = NSRect(x: 0, y: 0, width: 2056, height: 1329)
 
