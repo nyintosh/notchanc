@@ -1,11 +1,12 @@
 // Menu-bar-height pill for AirPods Active Noise Cancellation, one per selected display.
 // Beside a camera cutout (notch or Dynamic Island):
-//   Collapsed:  [AirPods icon] [ ---- cutout ---- ] [waveform]
-//   Hovered:    [AirPods icon] NOISE CANCELLATION ON [ -- cutout -- ] Title — Artist [waveform]
+//   Collapsed:  [waveform.slash] [ ---- cutout ---- ] [waveform]
+//   Hovered:    [waveform.slash] NOISE CANCELLATION ON [ -- cutout -- ] Title — Artist [waveform]
 //   Both text areas have the ANC label's width; a longer track title scrolls.
 // Without a cutout the pill keeps its full size and hovering swaps the text in place:
-//   [AirPods icon] NOISE CANCELLATION ON • NOISE CANC… [waveform]  →  [AirPods icon] Title — Artist [waveform]
-// With ANC off but media playing, the same pill shows in blue with a music note and "NOW PLAYING".
+//   [waveform.slash] NOISE CANCELLATION ON • NOISE CANC… [waveform]  →  [waveform.slash] Title — Artist [waveform]
+// With ANC off but media playing, the pill shows in blue with a music note: beside a cutout as above
+// with "NOW PLAYING" as the label; elsewhere the current track shows directly, hovered or not.
 
 import Cocoa
 
@@ -21,7 +22,8 @@ enum PillMode {
     case anc, media
 
     var label: String { self == .anc ? "NOISE CANCELLATION ON" : "NOW PLAYING" }
-    var symbol: String { self == .anc ? "airpodspro" : "music.note" }
+    // Outside noise cut out, versus your own audio playing.
+    var symbol: String { self == .anc ? "waveform.slash" : "music.note" }
 }
 
 // Where the pill goes on one screen. macOS reports a notch and a Dynamic Island the same way:
@@ -163,6 +165,7 @@ private final class Pill {
     private let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
     private static let font = NSFont.systemFont(ofSize: 11, weight: .semibold)
     private(set) var expanded: Bool
+    private let fixed: Bool   // media on a display without a cutout: the track always shows, hover changes nothing
     var collapseTimer: Timer?
 
     var hitRect: NSRect {
@@ -181,6 +184,7 @@ private final class Pill {
         scale = screen.backingScaleFactor
         self.color = color
         self.expanded = expanded
+        fixed = !layout.hasCutout && mode == .media
         let h = layout.window.height
 
         window = NSWindow(contentRect: layout.window, styleMask: .borderless, backing: .buffered, defer: false)
@@ -230,11 +234,11 @@ private final class Pill {
         rightClip = Self.clip(layout.rightText, .minXMargin)
         body.addSubview(leftClip)
         body.addSubview(rightClip)
-        fill(leftClip, with: label, alwaysScroll: !layout.hasCutout)
+        if !fixed { fill(leftClip, with: label, alwaysScroll: !layout.hasCutout) }
 
         body.frame = expanded ? layout.expanded : layout.collapsed
-        leftClip.alphaValue = layout.hasCutout == expanded ? 1 : 0
-        rightClip.alphaValue = expanded ? 1 : 0
+        leftClip.alphaValue = !fixed && layout.hasCutout == expanded ? 1 : 0
+        rightClip.alphaValue = fixed || expanded ? 1 : 0
         setTrack(track)
     }
 
@@ -306,6 +310,7 @@ private final class Pill {
 
     // Matches the reference recording: a quick ease-out, no bounce; the text fades with the motion.
     func setExpanded(_ on: Bool) {
+        guard !fixed else { return }
         expanded = on
         let target = on ? layout.expanded : layout.collapsed
         if reduceMotion { body.frame = target }
