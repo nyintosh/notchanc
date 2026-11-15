@@ -116,7 +116,7 @@ open NotchANC.xcodeproj                                          # or build and 
 | `tools/icon.swift` | Draws the app icon |
 | `tools/release.sh` | Builds, signs, notarizes and publishes a release |
 
-`tools/release.sh` needs the maintainer's Developer ID certificate, App Store Connect API key and Sparkle signing key, so forks should change the team, feed URL and keys first.
+`tools/release.sh` needs the maintainer's Developer ID certificate, App Store Connect API key (`ASC_KEY` path, `ASC_ID`, `ASC_ISSUER` in the environment) and Sparkle signing key, so forks should change the team, feed URL and keys first. [docs/development.md](docs/development.md) explains how the parts fit.
 
 ## Changelog
 
