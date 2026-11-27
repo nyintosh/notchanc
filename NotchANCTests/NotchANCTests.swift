@@ -38,6 +38,26 @@ struct NowPlayingTests {
         #expect(Track.parse("{}") == nil)
         #expect(Track.parse(#"{"playing":true,"title":"","artist":"x"}"#) == nil)
     }
+
+    @Test func position() {
+        let t = Track.parse(#"{"playing":true,"title":"A","artist":"B","bundle":"com.apple.Music","elapsed":30,"duration":200,"timestamp":1000,"extra":1}"#)!
+        #expect(t.bundle == "com.apple.Music" && t.duration == 200)
+        #expect(t.position(at: Date(timeIntervalSince1970: 1012)) == 42)
+        var paused = t
+        paused.playing = false
+        #expect(paused.position(at: Date(timeIntervalSince1970: 1012)) == 30)
+        #expect(Track(playing: true, title: "A", artist: "").position(at: .now) == nil)
+    }
+
+    // Play/pause shows on the press: pausing stops the clock where it is, playing runs it on from there.
+    @Test func toggled() {
+        let t = Track(playing: true, title: "A", artist: "", elapsed: 30, duration: 200, timestamp: 1000)
+        let paused = t.toggled(at: Date(timeIntervalSince1970: 1012))
+        #expect(!paused.playing && paused.elapsed == 42 && paused.timestamp == 1012)
+        #expect(paused.position(at: Date(timeIntervalSince1970: 1100)) == 42)
+        let resumed = paused.toggled(at: Date(timeIntervalSince1970: 1100))
+        #expect(resumed.playing && resumed.position(at: Date(timeIntervalSince1970: 1105)) == 47)
+    }
 }
 
 struct ColorTests {
