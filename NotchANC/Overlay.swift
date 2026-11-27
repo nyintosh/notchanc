@@ -116,6 +116,7 @@ final class NotchOverlay {
     var hiddenDisplays: Set<String> = []
     var menu: NSMenu?   // right-click menu, the same one the menu bar icon shows
     var onCommand: ((MediaCommand) -> Void)?
+    var onOpen: (() -> Void)?   // clicking the player's icon or title
     var track: Track? {
         didSet {
             if track != oldValue { pills.forEach { $0.setTrack(track) } }
@@ -161,7 +162,7 @@ final class NotchOverlay {
         pills.forEach { $0.close() }
         pills = NSScreen.screens.filter { !hiddenDisplays.contains($0.uuid) }.map {
             Pill(screen: $0, mode: mode, color: mode.color, track: track, expanded: open.contains($0.uuid), menu: menu, tap: tap,
-                 onCommand: { [weak self] in self?.onCommand?($0) })
+                 onCommand: { [weak self] in self?.onCommand?($0) }, onOpen: { [weak self] in self?.onOpen?() })
         }
         for p in pills {
             p.window.alphaValue = animated ? 0 : 1
@@ -253,7 +254,7 @@ private final class Pill {
     static func openWidth(_ layout: PillLayout) -> CGFloat { max(layout.expanded.width, playerWidth) }
 
     init(screen: NSScreen, mode: PillMode, color: NSColor, track: Track?, expanded: Bool, menu: NSMenu?, tap: AudioTap,
-         onCommand: @escaping (MediaCommand) -> Void) {
+         onCommand: @escaping (MediaCommand) -> Void, onOpen: @escaping () -> Void) {
         // Sized by the ANC label in both modes, so switching modes never changes the pill's size.
         let width = NSAttributedString(string: PillMode.anc.label, attributes: [.font: Self.font, .kern: 0.8]).size().width
         layout = screen.pillLayout(textWidth: ceil(width))
@@ -283,7 +284,8 @@ private final class Pill {
         window.contentView = root
 
         let view = PillView(layout: layout, mode: mode, color: color, fixed: !layout.hasCutout && mode == .media,
-                            reduceMotion: reduceMotion, state: state, tap: tap, onCommand: { [weak self] in self?.send($0) })
+                            reduceMotion: reduceMotion, state: state, tap: tap, onCommand: { [weak self] in self?.send($0) },
+                            onOpen: onOpen)
         let host = FirstClickHostingView(rootView: view)
         host.frame = root.bounds
         root.addSubview(host)
@@ -348,7 +350,9 @@ private struct PillView: View {
     @ObservedObject var state: PillState
     let tap: AudioTap
     let onCommand: (MediaCommand) -> Void
+    let onOpen: () -> Void
     @Namespace private var space
+    @State private var opening = false   // the press on the icon and title, which the travelling icon follows too
 
     private var showsPlayer: Bool { state.expanded && state.track != nil }
 
@@ -389,6 +393,8 @@ private struct PillView: View {
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .matchedGeometryEffect(id: Spot.art, in: space, isSource: false)
+                    .scaleEffect(opening ? 0.95 : 1)
+                    .animation(reduceMotion ? nil : Self.press, value: opening)
                     .animation(reduceMotion ? nil : showsPlayer ? Self.open : Self.conceal) { $0.opacity(showsPlayer ? 1 : 0) }
             }
             Image(systemName: mode.icon)
@@ -464,28 +470,34 @@ private struct PillView: View {
     // One row, as wide as the opened pill: icon; title, artist and progress; previous, play/pause, next.
     private func player(_ track: Track) -> some View {
         HStack(spacing: 14) {
-            Color.clear
-                .frame(width: 60, height: 60)
-                .matchedGeometryEffect(id: Spot.art, in: space, isSource: showsPlayer)
-                .overlay(alignment: .bottomTrailing) {   // the state icon as a badge on the corner
-                    spot(.state, inPlayer: true)
-                        .alignmentGuide(.trailing) { $0[.trailing] - 7 }
-                        .alignmentGuide(.bottom) { $0[.bottom] - 6 }
+            Button(action: onOpen) {
+                HStack(spacing: 14) {
+                    Color.clear
+                        .frame(width: 60, height: 60)
+                        .matchedGeometryEffect(id: Spot.art, in: space, isSource: showsPlayer)
+                        .overlay(alignment: .bottomTrailing) {   // the state icon as a badge on the corner
+                            spot(.state, inPlayer: true)
+                                .alignmentGuide(.trailing) { $0[.trailing] - 7 }
+                                .alignmentGuide(.bottom) { $0[.bottom] - 6 }
+                        }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Title(text: track.title, reduceMotion: reduceMotion)
+                        Text(track.artist)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.7))
+                            .lineLimit(1)
+                        TimelineView(.periodic(from: .now, by: 1)) { context in
+                            progress(track, at: context.date)
+                        }
+                        .id(track.title)   // a new track starts its bar afresh instead of sliding back
+                        .frame(height: 10)
+                        .padding(.top, 8)
+                    }
                 }
-            VStack(alignment: .leading, spacing: 2) {
-                Title(text: track.title, reduceMotion: reduceMotion)
-                Text(track.artist)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.7))
-                    .lineLimit(1)
-                TimelineView(.periodic(from: .now, by: 1)) { context in
-                    progress(track, at: context.date)
-                }
-                .id(track.title)   // a new track starts its bar afresh instead of sliding back
-                .frame(height: 10)
-                .padding(.top, 8)
+                .contentShape(Rectangle())
             }
-            .allowsHitTesting(false)
+            .buttonStyle(Press(reduceMotion: reduceMotion, held: $opening))
+            .accessibilityLabel("Show \(track.title)")
             HStack(spacing: 2) {
                 control("Previous", .previousTrack) { glyph("backward.fill", size: 14) }
                 control(track.playing ? "Pause" : "Play", .togglePlayPause) {
@@ -562,10 +574,12 @@ private struct Visualizer: View {
 // Buttons give a little while held.
 private struct Press: ButtonStyle {
     let reduceMotion: Bool
+    var held: Binding<Bool>?   // tells parts drawn outside the button, like the travelling icon, to press with it
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.95 : 1)
             .animation(reduceMotion ? nil : PillView.press, value: configuration.isPressed)
+            .onChange(of: configuration.isPressed) { held?.wrappedValue = $1 }
     }
 }
 

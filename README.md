@@ -41,7 +41,7 @@ On displays without a notch, such as an external monitor, the pill sits centred 
 ### Features
 
 - **Automatic.** NotchANC follows your AirPods' listening mode with no setup and nothing to pair.
-- **Now Playing.** Shows the track from any app: music, videos in a browser, podcasts. Hover to pause, skip or go back.
+- **Now Playing.** Shows the track from any app: music, videos in a browser, podcasts. Hover to pause, skip or go back. Click the track to jump to the app, or the browser tab, that's playing it.
 - **A live visualizer.** The bars beside the notch move with the sound that's playing.
 - **Media without ANC.** With Noise Cancellation off, the pill turns blue with a music icon while audio plays through headphones (AirPods, any Bluetooth headset, or the headphone jack). It stays hidden when sound comes from the speakers.
 - **Notch, Dynamic Island or neither.** Sizes itself to the camera cutout on notch MacBooks and on the MacBook Pro with Dynamic Island. Choose which displays show it.
@@ -62,6 +62,7 @@ On displays without a notch, such as an external monitor, the pill sits centred 
 3. Launch it. A pair of AirPods appears in your menu bar.
 4. Allow **Bluetooth** access when macOS asks. NotchANC uses it only to notice when your headphones disconnect.
 5. Allow **System Audio Recording** when macOS asks. NotchANC uses it only to move the visualizer while something plays. The sound stays on your Mac and is never recorded.
+6. The first time you click a track playing in a browser, allow NotchANC to control that browser. It only switches to the playing tab.
 
 The app is signed with a Developer ID and notarized by Apple, so it opens without Gatekeeper warnings. It checks GitHub for updates and installs them from **Check for Updates…**.
 
@@ -72,7 +73,7 @@ macOS has no public API for any of this, so NotchANC combines what the system al
 | Question | Where the answer comes from |
 |---|---|
 | Is Noise Cancellation on? | The Bluetooth daemon logs every listening-mode change, for example `LsnM ANC`. NotchANC reads it with Apple's `log` tool: the last 30 minutes at launch, then a live stream. |
-| What's playing? | macOS 15.4 and later only let Apple's own processes read Now Playing. NotchANC asks Apple's `osascript` to read it once a second and report only changes, and to send play/pause, next and previous. |
+| What's playing? | macOS 15.4 and later only let Apple's own processes read Now Playing. NotchANC asks Apple's `osascript` to read it once a second and report only changes, and to send play/pause, next and previous. Clicking the track asks the browser over AppleScript for the tab whose title holds it. |
 | How loud is it? | A Core Audio process tap hears the Mac's output while the pill shows something playing. NotchANC splits it into five frequency bands for the bars and keeps nothing. |
 | Are headphones in use? | Core Audio reports whether the current output is Bluetooth or the headphone jack, and notifies when that changes. |
 | Where's the notch or island? | `NSScreen` reports the camera cutout as a top safe-area inset plus the free areas to its left and right. The pill hugs whatever gap they leave, so it fits notches and the Dynamic Island alike. |

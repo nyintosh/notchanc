@@ -126,6 +126,79 @@ final class NowPlaying {
         p.standardError = FileHandle.nullDevice
         try? p.run()
     }
+
+    // Brings the player app forward and, in a browser, the tab playing it. MediaRemote names only the app, so the
+    // tab is the first whose title holds the track's. macOS asks once per browser before NotchANC may switch tabs.
+    func open(_ track: Track) {
+        // The id goes into the script's text (a browser's terms resolve only at compile time), so only a real one.
+        guard let bundle = track.bundle, bundle.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "." || $0 == "-") })
+        else { return }
+        let find = Self.tabFinders.first { $0.bundles.contains(bundle) }?.script ?? ""
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        p.arguments = ["-e", """
+        on run argv
+          set wanted to item 1 of argv
+          tell application id "\(bundle)"
+            activate
+            \(find)
+          end tell
+        end run
+        """, track.title]
+        p.standardOutput = FileHandle.nullDevice
+        p.standardError = FileHandle.nullDevice
+        try? p.run()
+    }
+
+    // How each family of browsers selects a tab, run inside its `tell` with the title in `wanted`.
+    private static let tabFinders: [(bundles: Set<String>, script: String)] = [
+        (["com.google.Chrome", "com.google.Chrome.beta", "com.brave.Browser", "com.microsoft.edgemac",
+          "com.vivaldi.Vivaldi", "org.chromium.Chromium"], """
+            repeat with w in windows
+              set i to 0
+              repeat with t in tabs of w
+                set i to i + 1
+                if title of t contains wanted then
+                  set active tab index of w to i
+                  set index of w to 1
+                  return
+                end if
+              end repeat
+            end repeat
+            """),
+        (["com.apple.Safari", "com.apple.SafariTechnologyPreview"], """
+            repeat with w in windows
+              repeat with t in tabs of w
+                if name of t contains wanted then
+                  set current tab of w to t
+                  set index of w to 1
+                  return
+                end if
+              end repeat
+            end repeat
+            """),
+        (["company.thebrowser.Browser"], """
+            repeat with w in windows
+              repeat with t in tabs of w
+                if title of t contains wanted then
+                  tell t to select
+                  set index of w to 1
+                  return
+                end if
+              end repeat
+            end repeat
+            """),
+        (["company.thebrowser.dia"], """
+            repeat with w in windows
+              repeat with t in tabs of w
+                if title of t contains wanted then
+                  focus t
+                  return
+                end if
+              end repeat
+            end repeat
+            """),
+    ]
 }
 
 // MediaRemote's command numbers.
