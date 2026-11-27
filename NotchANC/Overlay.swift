@@ -213,7 +213,7 @@ final class NotchOverlay {
 // What the SwiftUI drawing follows; the AppKit side changes it inside the pill's animations.
 private final class PillState: ObservableObject {
     @Published var track: Track?
-    @Published var appIcon: NSImage?   // the player app's icon, shown where Alcove shows album art
+    @Published var appIcon: NSImage?   // the player app's icon, shown in place of album art
     @Published var expanded: Bool
 
     init(expanded: Bool) { self.expanded = expanded }
@@ -329,7 +329,7 @@ private final class FirstClickHostingView<Content: View>: NSHostingView<Content>
 
 // Black pill flush with the top of the screen, bottom corners rounded. Its icons are one set that travels between
 // the collapsed bar and the open player, so both read as one object changing shape.
-// Motion follows the charles-ux-animation skill: springs with no bounce, so hovering out halfway turns the pill around
+// Springs with no bounce, so hovering out halfway turns the pill around
 // from where it is, and closing is quicker than opening. The icons move on the shape's clock; the text fades in
 // a beat later, once the icons have crossed it, and out at once.
 private struct PillView: View {
@@ -442,7 +442,7 @@ private struct PillView: View {
                             .frame(width: layout.rightText.width, height: height)
                             .opacity(state.expanded && state.track == nil ? 1 : 0)
                     }
-                    // The visualizer stays at the top-right corner and rides the edge out, as on the Dynamic Island.
+                    // The visualizer stays at the top-right corner and rides the edge out.
                     Group {
                         if reduceMotion {
                             Image(systemName: "waveform").font(.system(size: 13, weight: .semibold))
@@ -543,7 +543,7 @@ private struct PillView: View {
     }
 }
 
-// Bars that follow what's playing, low notes on the left, drawn like the Dynamic Island's: thin, rounded,
+// Bars that follow what's playing, low notes on the left: thin, rounded,
 // growing both ways from the middle. Only this view redraws as they move.
 private struct Visualizer: View {
     @ObservedObject var tap: AudioTap
