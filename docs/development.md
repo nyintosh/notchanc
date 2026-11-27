@@ -18,6 +18,7 @@ How the parts fit, and the facts that are easy to get wrong. The README covers w
 - SF Symbols are fine in the UI and menu bar, but not in the app icon (license). The icon is drawn in `tools/icon.swift`.
 - Minimum macOS is 14.2, for the Core Audio process tap. Don't add `#available` branches.
 - A MediaRemote command sent from osascript is dropped if osascript exits at once; `send()` waits half a second first.
+- Clicking the player's track opens its app via osascript; for a browser it also selects the first tab whose title holds the track's title, since MediaRemote names only the app. Each browser family scripts tabs differently (`NowPlaying.tabFinders`); the bundle id is written into the script because a browser's terms resolve only at compile time.
 - The player shows the playing app's icon, not the artwork: osascript reports the artwork's type and size but not its bytes.
 - Never run the tests in a folder whose app was launched: macOS App Management then blocks writes into that signed bundle.
 - Before a release, add the version's notes to `CHANGELOG.md`.
