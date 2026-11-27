@@ -8,6 +8,14 @@
             <sparkle:version>29</sparkle:version>
             <sparkle:shortVersionString>1.0.6</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.2</sparkle:minimumSystemVersion>
+            <description sparkle:format="markdown"><![CDATA[- **Click the track to go to it.** Clicking the player's icon or title brings the playing app forward, and in a browser switches to the tab that's playing. macOS asks once per browser.
+- **Control what's playing.** Hover the pill and it opens into a small player with the app's icon, title, artist, progress, and previous, play/pause and next. Play/pause changes the moment you press it.
+- The collapsed pill's icons travel into the player, so opening and closing read as one smooth motion.
+- **The visualizer moves with the music.** It follows the sound that's playing, so NotchANC now asks once for System Audio Recording. The sound stays on your Mac and is never recorded.
+- Hovering waits a moment before opening, so passing over the menu bar doesn't open it.
+- Now needs macOS 14.2 or later.
+
+]]></description>
             <enclosure url="https://github.com/nyintosh/notchanc/releases/download/v1.0.6/NotchANC-1.0.6.dmg" length="2089069" type="application/octet-stream" sparkle:edSignature="NRXbJEnxwaab2cXuaXWKrgcRRy0NnyDP4odUqZgoIREQzrF4zYNENWaKE9rcBRTNSsEz6f7+O+Y3EZPgC/nqDQ=="/>
         </item>
         <item>
