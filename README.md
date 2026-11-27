@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://github.com/nyintosh/notchanc/releases/latest"><b>Download the latest release</b></a>
-  · macOS 14 or later · Free and open source
+  · macOS 14.2 or later · Free and open source
 </p>
 
 ---
@@ -24,7 +24,7 @@ When your AirPods switch to **Noise Cancellation**, a black pill appears around 
   <img src="docs/images/notch-collapsed.png" width="290" alt="The collapsed pill beside the notch: a moon on the left, a waveform on the right">
 </p>
 
-Hover it and it slides open. Noise Cancellation is on the left and what you're playing is on the right.
+Hover it and it opens into a small player: the playing app's icon, the title and artist, a progress bar, and previous, play/pause and next. The pill's icons travel into the player, so the two read as one piece. With nothing playing it widens to show Noise Cancellation on the left and the track on the right.
 
 <p align="center">
   <img src="docs/images/notch-hover.png" width="618" alt="The hovered pill: NOISE CANCELLATION ON on the left of the notch, Weightless — Marconi Union on the right">
@@ -41,7 +41,8 @@ On displays without a notch, such as an external monitor, the pill sits centred 
 ### Features
 
 - **Automatic.** NotchANC follows your AirPods' listening mode with no setup and nothing to pair.
-- **Now Playing.** Shows the track from any app: Music, Spotify, YouTube in a browser, podcasts. The waveform moves only while something plays.
+- **Now Playing.** Shows the track from any app: music, videos in a browser, podcasts. Hover to pause, skip or go back.
+- **A live visualizer.** The bars beside the notch move with the sound that's playing.
 - **Media without ANC.** With Noise Cancellation off, the pill turns blue with a music icon while audio plays through headphones (AirPods, any Bluetooth headset, or the headphone jack). It stays hidden when sound comes from the speakers.
 - **Notch, Dynamic Island or neither.** Sizes itself to the camera cutout on notch MacBooks and on the MacBook Pro with Dynamic Island. Choose which displays show it.
 - **Stays out of the way.** Clicks pass through to the menu bar. Behind full-screen apps on external displays it hides. Clicking it never steals focus.
@@ -60,6 +61,7 @@ On displays without a notch, such as an external monitor, the pill sits centred 
 2. Open it and drag **NotchANC** into **Applications**.
 3. Launch it. A pair of AirPods appears in your menu bar.
 4. Allow **Bluetooth** access when macOS asks. NotchANC uses it only to notice when your headphones disconnect.
+5. Allow **System Audio Recording** when macOS asks. NotchANC uses it only to move the visualizer while something plays. The sound stays on your Mac and is never recorded.
 
 The app is signed with a Developer ID and notarized by Apple, so it opens without Gatekeeper warnings. It checks GitHub for updates and installs them from **Check for Updates…**.
 
@@ -70,7 +72,8 @@ macOS has no public API for any of this, so NotchANC combines what the system al
 | Question | Where the answer comes from |
 |---|---|
 | Is Noise Cancellation on? | The Bluetooth daemon logs every listening-mode change, for example `LsnM ANC`. NotchANC reads it with Apple's `log` tool: the last 30 minutes at launch, then a live stream. |
-| What's playing? | macOS 15.4 and later only let Apple's own processes read Now Playing. NotchANC asks Apple's `osascript` to read it once a second and report only changes. |
+| What's playing? | macOS 15.4 and later only let Apple's own processes read Now Playing. NotchANC asks Apple's `osascript` to read it once a second and report only changes, and to send play/pause, next and previous. |
+| How loud is it? | A Core Audio process tap hears the Mac's output while the pill shows something playing. NotchANC splits it into five frequency bands for the bars and keeps nothing. |
 | Are headphones in use? | Core Audio reports whether the current output is Bluetooth or the headphone jack, and notifies when that changes. |
 | Where's the notch or island? | `NSScreen` reports the camera cutout as a top safe-area inset plus the free areas to its left and right. The pill hugs whatever gap they leave, so it fits notches and the Dynamic Island alike. |
 

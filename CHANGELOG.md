@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+- **Control what's playing.** Hover the pill and it opens into a small player with the app's icon, title, artist, progress, and previous, play/pause and next. Play/pause changes the moment you press it.
+- The collapsed pill's icons travel into the player, so opening and closing read as one smooth motion.
+- **The visualizer moves with the music.** It follows the sound that's playing, so NotchANC now asks once for System Audio Recording. The sound stays on your Mac and is never recorded.
+- Hovering waits a moment before opening, so passing over the menu bar doesn't open it.
+- Now needs macOS 14.2 or later.
+
 ## [1.0.5]
 - **Choose the menu bar icon** in Settings › General from ten options. While Noise Cancellation is on it shows your Noise Cancellation icon.
 - Fixed a crash when turning **Hide menu bar icon** on or off, which also closed the Settings window.

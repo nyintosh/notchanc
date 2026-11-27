@@ -84,6 +84,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.overlay.track = track
             self?.updatePill()
         }
+        overlay.onCommand = { [weak self] in self?.nowPlaying.send($0) }
         nowPlaying.start()   // also shows the pill for media while ANC is off
         output.onChange = { [weak self] in self?.updatePill() }
         output.start()
