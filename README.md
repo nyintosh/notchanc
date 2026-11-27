@@ -41,7 +41,7 @@ On displays without a notch, such as an external monitor, the pill sits centred 
 ### Features
 
 - **Automatic.** NotchANC follows your AirPods' listening mode with no setup and nothing to pair.
-- **Now Playing.** Shows the track from any app: Music, Spotify, YouTube in a browser, podcasts. Hover to pause, skip or go back.
+- **Now Playing.** Shows the track from any app: music, videos in a browser, podcasts. Hover to pause, skip or go back.
 - **A live visualizer.** The bars beside the notch move with the sound that's playing.
 - **Media without ANC.** With Noise Cancellation off, the pill turns blue with a music icon while audio plays through headphones (AirPods, any Bluetooth headset, or the headphone jack). It stays hidden when sound comes from the speakers.
 - **Notch, Dynamic Island or neither.** Sizes itself to the camera cutout on notch MacBooks and on the MacBook Pro with Dynamic Island. Choose which displays show it.
