@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.0.6]
 - **Click the track to go to it.** Clicking the player's icon or title brings the playing app forward, and in a browser switches to the tab that's playing. macOS asks once per browser.
 - **Control what's playing.** Hover the pill and it opens into a small player with the app's icon, title, artist, progress, and previous, play/pause and next. Play/pause changes the moment you press it.
 - The collapsed pill's icons travel into the player, so opening and closing read as one smooth motion.
