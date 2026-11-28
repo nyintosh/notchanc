@@ -403,7 +403,11 @@ private struct PillView: View {
                         .animation(reduceMotion ? nil : open ? Self.reveal : Self.conceal, value: open)
                         .allowsHitTesting(open)
                 }
-                .overlay { shape.stroke(tint.opacity(idle ? 0.3 : 0.55), lineWidth: 1) }
+                // The edge fades in with the wash, so no line shows along the top of the screen.
+                .overlay {
+                    shape.stroke(LinearGradient(colors: [.clear, tint.opacity(idle ? 0.14 : 0.28)], startPoint: .top, endPoint: .bottom),
+                                 lineWidth: 1)
+                }
                 .clipShape(shape)
                 .shadow(color: .black.opacity(open ? 0.3 : 0), radius: 14, y: 6)
             bar(width: width, height: h)
