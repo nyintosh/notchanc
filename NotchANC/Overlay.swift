@@ -281,17 +281,17 @@ private final class Pill {
         return ceil(CTLineGetTypographicBounds(line, nil, nil, nil)) + 2
     }
 
-    // The countdown takes the right end while nothing plays; otherwise a track brings its bars or pause mark.
-    static func barWidth(_ layout: PillLayout, _ mode: PillMode, _ track: Track?, counting: Bool) -> CGFloat {
+    // The countdown takes the right end while nothing plays; a track brings its bars or pause mark, a rung timer its bell.
+    static func barWidth(_ layout: PillLayout, _ mode: PillMode, _ track: Track?, counting: Bool, rang: Bool) -> CGFloat {
         guard !layout.hasCutout else { return layout.bar.width }
-        let trailing: CGFloat? = counting && track?.playing != true ? countdownWidth : track != nil ? PillLayout.icon : nil
+        let trailing: CGFloat? = counting && track?.playing != true ? countdownWidth : track != nil || rang ? PillLayout.icon : nil
         return PillLayout.barWidth(text: barText(mode, track).map(textWidth), trailing: trailing)
     }
 
     // The window reaches below the bar and beyond its sides for the card;
     // the pill is centred in it and fills only what's shown.
     var hitRect: NSRect {
-        let w = state.expanded ? layout.open.width : Self.barWidth(layout, mode, state.track, counting: countdown.session != nil)
+        let w = state.expanded ? layout.open.width : Self.barWidth(layout, mode, state.track, counting: countdown.session != nil, rang: countdown.rang)
         let h = layout.bar.height + (state.expanded ? Self.card(state.track) : 0)
         let f = window.frame
         return NSRect(x: f.midX - w / 2, y: f.maxY - h, width: w, height: h)
@@ -415,7 +415,7 @@ private struct PillView: View {
     var body: some View {
         let h = layout.bar.height
         let card = Pill.card(state.track)
-        let width = open ? layout.open.width : Pill.barWidth(layout, mode, state.track, counting: countdown.session != nil)
+        let width = open ? layout.open.width : Pill.barWidth(layout, mode, state.track, counting: countdown.session != nil, rang: countdown.rang)
         let radius: CGFloat = open ? 24 : min(13, h / 2 - 1)   // a 24pt menu bar can't take 13pt corners
         let shape = UnevenRoundedRectangle(bottomLeadingRadius: radius, bottomTrailingRadius: radius)
         ZStack(alignment: .top) {
@@ -522,9 +522,15 @@ private struct PillView: View {
             .allowsHitTesting(false)
     }
 
-    // Bars while something plays; otherwise the countdown or its bell; a pause mark while a track waits; else nothing.
+    // The bell once a timer has rung, until the card is opened; else bars while something plays, the countdown,
+    // a pause mark while a track waits, or nothing.
     @ViewBuilder private var trailing: some View {
-        if playing {
+        if countdown.rang {
+            Image(systemName: "bell.fill")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(tint)
+                .accessibilityLabel("Time's up")
+        } else if playing {
             Group {
                 if reduceMotion {
                     Image(systemName: "waveform").font(.system(size: 13, weight: .semibold))
@@ -542,11 +548,6 @@ private struct PillView: View {
                     .frame(width: Pill.countdownWidth, alignment: .trailing)
             }
             .accessibilityLabel(session.focus ? "Focus session" : "Timer")
-        } else if countdown.rang {
-            Image(systemName: "bell.fill")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(tint)
-                .accessibilityLabel("Time's up")
         } else if state.track != nil {
             Image(systemName: "pause.fill")
                 .font(.system(size: 10, weight: .semibold))
