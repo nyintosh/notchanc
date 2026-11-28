@@ -161,7 +161,7 @@ private struct CardPane: View {
             Section("Tiles") {
                 Toggle("Headphones battery", isOn: $headphones)
                 Toggle("Next calendar event", isOn: $calendar)
-                Toggle("Mac battery and processor", isOn: $mac)
+                Toggle("Mac: processor, graphics, memory, disk", isOn: $mac)
                 Toggle("Timer and focus", isOn: $timer)
             }
             Section("Tabs") {

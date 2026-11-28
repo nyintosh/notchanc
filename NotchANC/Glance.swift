@@ -1,9 +1,9 @@
-// What the card's tiles show: the headphones' battery, the next calendar event, and the Mac's battery and
-// processor load. Read only while a pill is open.
+// What the card's tiles show: the headphones' battery, the next calendar event, and how busy the Mac is
+// (processor, graphics, memory, disk). Read only while a pill is open.
 
 import EventKit
 import Foundation
-import IOKit.ps
+import IOKit
 
 struct Headphones: Equatable {
     var name: String
@@ -29,10 +29,12 @@ struct NextEvent: Equatable {
     }
 }
 
+// Percentages. A reading the Mac won't give is left out of the tile.
 struct MacStats: Equatable {
-    var battery: Int?   // nil on a Mac without one
-    var charging = false
-    var processor = 0   // percent busy since the last reading
+    var processor = 0   // busy since the last reading
+    var graphics: Int?
+    var memory: Int?
+    var disk: Int?
 }
 
 final class Glance: ObservableObject {
@@ -60,7 +62,7 @@ final class Glance: ObservableObject {
     init() { ticks = Self.processorTicks() }   // a baseline, so the first reading covers real time
 
     private func read() {
-        var mac = Self.power()
+        var mac = MacStats(graphics: Self.graphics(), memory: Self.memory(), disk: self.mac.disk)
         let now = Self.processorTicks()
         if let now, let ticks, now.total > ticks.total {
             mac.processor = Int((Double(now.busy - ticks.busy) / Double(now.total - ticks.total) * 100).rounded())
@@ -68,8 +70,9 @@ final class Glance: ObservableObject {
             mac.processor = self.mac.processor
         }
         ticks = now
+        // Battery levels, the calendar and the disk move slowly: every 30 seconds is plenty.
+        if readings % 15 == 0 { mac.disk = Self.disk() }
         if mac != self.mac { self.mac = mac }
-        // Battery levels and the calendar move slowly: every 30 seconds is plenty.
         if readings % 15 == 0 {
             readHeadphones()
             readEvent()
@@ -132,16 +135,42 @@ final class Glance: ObservableObject {
         return nil
     }
 
-    private static func power() -> MacStats {
-        let info = IOPSCopyPowerSourcesInfo().takeRetainedValue()
-        let sources = IOPSCopyPowerSourcesList(info).takeRetainedValue() as [CFTypeRef]
-        for source in sources {
-            guard let d = IOPSGetPowerSourceDescription(info, source)?.takeUnretainedValue() as? [String: Any],
-                  d[kIOPSTypeKey] as? String == kIOPSInternalBatteryType,
-                  let now = d[kIOPSCurrentCapacityKey] as? Int, let full = d[kIOPSMaxCapacityKey] as? Int, full > 0 else { continue }
-            return MacStats(battery: now * 100 / full, charging: d[kIOPSIsChargingKey] as? Bool ?? false)
+    // ponytail: no public API reports GPU load; the graphics driver publishes it in the I/O Registry under this name.
+    private static func graphics() -> Int? {
+        var iterator: io_iterator_t = 0
+        guard IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching("IOAccelerator"), &iterator) == KERN_SUCCESS else { return nil }
+        defer { IOObjectRelease(iterator) }
+        var busiest: Int?
+        while case let service = IOIteratorNext(iterator), service != 0 {
+            defer { IOObjectRelease(service) }
+            let statistics = IORegistryEntryCreateCFProperty(service, "PerformanceStatistics" as CFString, kCFAllocatorDefault, 0)?
+                .takeRetainedValue() as? [String: Any]
+            if let load = statistics?["Device Utilization %"] as? Int { busiest = max(busiest ?? 0, load) }
         }
-        return MacStats()
+        return busiest
+    }
+
+    // Memory in use the way Activity Monitor counts it: apps' own pages, wired and compressed, out of what's installed.
+    private static func memory() -> Int? {
+        var info = vm_statistics64()
+        var count = mach_msg_type_number_t(MemoryLayout<vm_statistics64>.size / MemoryLayout<integer_t>.size)
+        let result = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { host_statistics64(mach_host_self(), HOST_VM_INFO64, $0, &count) }
+        }
+        guard result == KERN_SUCCESS else { return nil }
+        let pages = UInt64(info.internal_page_count) - UInt64(info.purgeable_count) + UInt64(info.wire_count) + UInt64(info.compressor_page_count)
+        return percent(pages * UInt64(vm_kernel_page_size), of: ProcessInfo.processInfo.physicalMemory)
+    }
+
+    // How full the startup disk is, counting space macOS can free on demand as free.
+    private static func disk() -> Int? {
+        let values = try? URL(fileURLWithPath: "/").resourceValues(forKeys: [.volumeTotalCapacityKey, .volumeAvailableCapacityForImportantUsageKey])
+        guard let total = values?.volumeTotalCapacity, let free = values?.volumeAvailableCapacityForImportantUsage, total > 0 else { return nil }
+        return percent(UInt64(total) - UInt64(min(free, Int64(total))), of: UInt64(total))
+    }
+
+    static func percent(_ part: UInt64, of whole: UInt64) -> Int {
+        whole == 0 ? 0 : Int((Double(min(part, whole)) / Double(whole) * 100).rounded())
     }
 
     private static func processorTicks() -> (busy: UInt64, total: UInt64)? {

@@ -91,6 +91,14 @@ struct GlanceTests {
         #expect(Glance.headphones(in: Data("{}".utf8)) == nil)
     }
 
+    @Test func percent() {
+        #expect(Glance.percent(0, of: 16) == 0)
+        #expect(Glance.percent(5, of: 16) == 31)
+        #expect(Glance.percent(16, of: 16) == 100)
+        #expect(Glance.percent(20, of: 16) == 100)
+        #expect(Glance.percent(1, of: 0) == 0)
+    }
+
     @Test func when() {
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         let event = { (start: TimeInterval) in NextEvent(title: "Standup", start: now.addingTimeInterval(start), end: now.addingTimeInterval(start + 1800)) }

@@ -901,27 +901,48 @@ private struct Tiles: View {
     @AppStorage(Countdown.presetKeys[1]) private var second = Countdown.presetDefaults[1]
     @AppStorage(Countdown.presetKeys[2]) private var third = Countdown.presetDefaults[2]
 
+    // The row fits four tiles' width; the Mac's takes two. With everything on it runs longer and scrolls.
     var body: some View {
-        HStack(spacing: Self.spacing) {
-            if showsHeadphones, let headphones = glance.headphones, let level = headphones.level {
-                tile(headphones.main == nil ? "airpodspro" : "headphones", headphones.name, "\(level)%",
-                     headphones.charger.map { "Case \($0)%" })
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: Self.spacing) {
+                if showsHeadphones, let headphones = glance.headphones, let level = headphones.level {
+                    tile(headphones.main == nil ? "airpodspro" : "headphones", headphones.name, "\(level)%",
+                         headphones.charger.map { "Case \($0)%" })
+                }
+                if showsCalendar { calendar }
+                if showsMac { mac }
+                if showsTimer { timer }
             }
-            if showsCalendar { calendar }
-            if showsMac { mac }
-            if showsTimer { timer }
-            Spacer(minLength: 0)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    // The Mac's battery with the processor load under it; on a Mac without a battery, the load alone.
-    @ViewBuilder private var mac: some View {
-        if let battery = glance.mac.battery {
-            tile("laptopcomputer", "Mac", "\(battery)%",
-                 glance.mac.charging ? "Charging · CPU \(glance.mac.processor)%" : "CPU \(glance.mac.processor)%")
-        } else {
-            tile("cpu", "CPU", "\(glance.mac.processor)%", nil)
+    // How busy the Mac is, one small gauge each: processor, graphics, memory, disk.
+    private var mac: some View {
+        HStack(alignment: .top, spacing: 10) {
+            gauge("CPU", glance.mac.processor)
+            if let graphics = glance.mac.graphics { gauge("GPU", graphics) }
+            if let memory = glance.mac.memory { gauge("Memory", memory) }
+            if let disk = glance.mac.disk { gauge("Disk", disk) }
         }
+        .padding(10)
+        .frame(width: 2 * Self.width + Self.spacing, height: Self.height, alignment: .topLeading)
+        .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private func gauge(_ name: String, _ percent: Int) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(name).font(.system(size: 10, weight: .medium)).foregroundStyle(.white.opacity(0.55)).lineLimit(1)
+            value("\(percent)%")
+            Capsule().fill(.white.opacity(0.14))
+                .frame(height: 3)
+                .overlay(alignment: .leading) {
+                    GeometryReader { g in Capsule().fill(tint).frame(width: g.size.width * CGFloat(percent) / 100) }
+                }
+                .padding(.top, 3)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
     }
 
     // The next event; before that, a button to let the app read the calendar. Hidden once access is refused.
