@@ -917,32 +917,37 @@ private struct Tiles: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    // How busy the Mac is, one small gauge each: processor, graphics, memory, disk.
+    // How busy the Mac is, one ring each: processor, graphics, memory, disk.
     private var mac: some View {
-        HStack(alignment: .top, spacing: 10) {
-            gauge("CPU", glance.mac.processor)
-            if let graphics = glance.mac.graphics { gauge("GPU", graphics) }
-            if let memory = glance.mac.memory { gauge("Memory", memory) }
-            if let disk = glance.mac.disk { gauge("Disk", disk) }
+        HStack(spacing: 6) {
+            ring("CPU", "Processor", glance.mac.processor)
+            if let graphics = glance.mac.graphics { ring("GPU", "Graphics", graphics) }
+            if let memory = glance.mac.memory { ring("MEM", "Memory", memory) }
+            if let disk = glance.mac.disk { ring("SSD", "Disk", disk) }
         }
-        .padding(10)
-        .frame(width: 2 * Self.width + Self.spacing, height: Self.height, alignment: .topLeading)
+        .padding(.horizontal, 10)
+        .frame(width: 2 * Self.width + Self.spacing, height: Self.height)
         .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
-    private func gauge(_ name: String, _ percent: Int) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(name).font(.system(size: 10, weight: .medium)).foregroundStyle(.white.opacity(0.55)).lineLimit(1)
-            value("\(percent)%")
-            Capsule().fill(.white.opacity(0.14))
-                .frame(height: 3)
-                .overlay(alignment: .leading) {
-                    GeometryReader { g in Capsule().fill(tint).frame(width: g.size.width * CGFloat(percent) / 100) }
-                }
-                .padding(.top, 3)
+    // The ring fills clockwise from the top; the number and a short label sit inside it.
+    private func ring(_ short: String, _ name: String, _ percent: Int) -> some View {
+        ZStack {
+            Circle().stroke(.white.opacity(0.16), lineWidth: 3)
+            Circle()
+                .trim(from: 0, to: CGFloat(percent) / 100)
+                .stroke(tint, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+            VStack(spacing: -1) {
+                Text("\(percent)").font(.system(size: 12, weight: .semibold).monospacedDigit()).foregroundStyle(.white)
+                    + Text("%").font(.system(size: 7, weight: .semibold)).foregroundStyle(.white.opacity(0.7))
+                Text(short).font(.system(size: 6.5, weight: .bold)).foregroundStyle(.white.opacity(0.6))
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .combine)
+        .frame(width: 46, height: 46)
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(name) \(percent) percent")
     }
 
     // The next event; before that, a button to let the app read the calendar. Hidden once access is refused.

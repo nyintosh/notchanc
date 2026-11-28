@@ -2,7 +2,7 @@
 
 ## [1.0.7]
 - **A new look for the pill.** It is washed in its state's colour, shows the playing app's icon, and a pause mark while paused. Hovering opens one card: the listening mode (Noise Cancellation, Transparency, Adaptive) and the output device with its volume on top, the player below. On a display without a notch the bar now hugs its text.
-- **Tiles in the card.** Under the player: your headphones' battery (with the case) and the next calendar event with how soon it starts, and how busy the Mac is: processor, graphics, memory and disk. The calendar is read only after you press Show events.
+- **Tiles in the card.** Under the player: your headphones' battery (with the case) and the next calendar event with how soon it starts, and four rings for how busy the Mac is: processor, graphics, memory and disk. The calendar is read only after you press Show events.
 - **File shelf.** Drag files onto the pill to park them; open one with a click, drag it back out to use it. The files stay where they are.
 - **Clipboard history.** The last ten texts you copied, in a tab of the card; click one to copy it again. Kept in memory only, and anything a password manager marks as secret is skipped.
 - **Quick timer and focus session.** Start 5, 15 or 25 minutes from the card, or a focus session (25 or 50 minutes, set in Settings › Focus). The pill shows the time left and rings at the end. A focus session can run one of your Shortcuts when it starts and another when it ends, to turn a macOS Focus on and off.
