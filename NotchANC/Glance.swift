@@ -64,7 +64,7 @@ final class Glance: ObservableObject {
     private func read() {
         var mac = MacStats(graphics: Self.graphics(), memory: Self.memory(), disk: self.mac.disk)
         let now = Self.processorTicks()
-        if let now, let ticks, now.total > ticks.total {
+        if let now, let ticks, now.total > ticks.total, now.busy >= ticks.busy {   // the counters wrap after long uptimes
             mac.processor = Int((Double(now.busy - ticks.busy) / Double(now.total - ticks.total) * 100).rounded())
         } else {
             mac.processor = self.mac.processor
@@ -158,7 +158,8 @@ final class Glance: ObservableObject {
             $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { host_statistics64(mach_host_self(), HOST_VM_INFO64, $0, &count) }
         }
         guard result == KERN_SUCCESS else { return nil }
-        let pages = UInt64(info.internal_page_count) - UInt64(info.purgeable_count) + UInt64(info.wire_count) + UInt64(info.compressor_page_count)
+        let apps = info.internal_page_count > info.purgeable_count ? info.internal_page_count - info.purgeable_count : 0
+        let pages = UInt64(apps) + UInt64(info.wire_count) + UInt64(info.compressor_page_count)
         return percent(pages * UInt64(vm_kernel_page_size), of: ProcessInfo.processInfo.physicalMemory)
     }
 
