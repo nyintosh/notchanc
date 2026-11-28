@@ -276,6 +276,7 @@ private final class PillState: ObservableObject {
     @Published var listening: ListeningMode?
     @Published var expanded: Bool
     @Published var tab = CardTab.now
+    @Published var query = ""   // what the shelf or the clipboard is searched for
 
     init(output: Output, listening: ListeningMode?, expanded: Bool) {
         self.output = output
@@ -310,7 +311,8 @@ private final class Pill {
     var collapseTimer: Timer?
 
     // The card under the bar: the chips, a hairline, the player if there is a track, then the tiles.
-    static let shelf: CGFloat = 108     // the shelf tab: one row of files, or the drop zone
+    static let tools: CGFloat = 26 + 8  // the search field and the remove button over a tab's content, and the gap under them
+    static let shelf = tilesGap + tools + 84 + 14   // the shelf tab: its tools, then one row of files or the drop zone
     static let clipRow: CGFloat = 30    // one copy in the clipboard tab
     static let clipGap: CGFloat = 6
     static let clipRows = 4             // shown before the list scrolls
@@ -319,7 +321,7 @@ private final class Pill {
     static func clipboard(_ copies: Int) -> CGFloat {
         guard copies > 0 else { return shelf }
         let rows = CGFloat(min(copies, clipRows))
-        return tilesGap + rows * clipRow + (rows - 1) * clipGap + 12
+        return tilesGap + tools + rows * clipRow + (rows - 1) * clipGap + 12
     }
 
     // Under the chips and the hairline, each tab takes only the room its content needs.
@@ -373,8 +375,9 @@ private final class Pill {
         frame.size.height += below
 
         // A non-activating panel: clicking the pill never takes focus from the app in front.
-        let panel = NSPanel(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        let panel = PillPanel(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         panel.hidesOnDeactivate = false
+        panel.becomesKeyOnlyIfNeeded = true   // only the search field takes the keyboard; buttons never do
         window = panel
         window.isOpaque = false
         window.backgroundColor = .clear
@@ -415,8 +418,16 @@ private final class Pill {
     // Every opening starts on the tab asked for; closing keeps the tab, so the card doesn't change as it leaves.
     func setExpanded(_ on: Bool, tab: CardTab = .now) {
         guard on != state.expanded else { return }
-        if on { state.tab = tab }
+        if on {
+            state.tab = tab
+            state.query = ""
+        }
         withAnimation(reduceMotion ? nil : on ? PillView.open : PillView.close) { state.expanded = on }
+        // Typing in the search field made the panel key; putting it back in line returns the keyboard to the app in front.
+        if !on, window.isKeyWindow {
+            window.orderOut(nil)
+            window.orderFrontRegardless()
+        }
     }
 
     // Play/pause answers on the press; the player reports within a second, and if it never does, the pill goes back.
@@ -437,7 +448,12 @@ private final class Pill {
     }
 }
 
-// The panel never becomes key, so without this the first click would only be spent on focus.
+// A borderless panel refuses the keyboard unless told otherwise; the search field needs it.
+private final class PillPanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+}
+
+// The panel is rarely key, so without this the first click would only be spent on focus.
 private final class FirstClickHostingView<Content: View>: NSHostingView<Content> {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }
@@ -465,7 +481,7 @@ private struct PillView: View {
     let tap: AudioTap
     let glance: Glance
     @ObservedObject var countdown: Countdown
-    @ObservedObject var shelf: Shelf           // whether it holds anything decides if Remove all shows
+    let shelf: Shelf
     @ObservedObject var clipboard: Clipboard   // its count sets the clipboard tab's height
     let onCommand: (MediaCommand) -> Void
     let onOpen: () -> Void
@@ -658,7 +674,6 @@ private struct PillView: View {
                     }
                 }
                 Spacer(minLength: 0)
-                empty
                 tabs
             }
             .frame(height: Pill.chips)
@@ -673,37 +688,14 @@ private struct PillView: View {
                 Tiles(glance: glance, countdown: countdown, tint: tint, reduceMotion: reduceMotion)
                     .frame(height: Pill.tiles, alignment: .top)
             case .shelf:
-                ShelfView(shelf: shelf, dropping: dropping, tint: tint, reduceMotion: reduceMotion).frame(height: Pill.shelf)
+                ShelfView(shelf: shelf, query: $state.query, dropping: dropping, tint: tint, reduceMotion: reduceMotion)
+                    .frame(height: Pill.shelf)
             case .clipboard:
-                ClipboardView(clipboard: clipboard, tint: tint, reduceMotion: reduceMotion)
+                ClipboardView(clipboard: clipboard, query: $state.query, tint: tint, reduceMotion: reduceMotion)
                     .frame(height: Pill.clipboard(clipboard.items.count))
             }
         }
         .padding(.horizontal, Self.margin)
-    }
-
-    // Beside the tabs while the shelf or the clipboard is open and holds something: one press empties it.
-    @ViewBuilder private var empty: some View {
-        if state.tab == .shelf, !shelf.files.isEmpty {
-            emptyButton("Remove all") { shelf.removeAll() }
-        } else if state.tab == .clipboard, !clipboard.items.isEmpty {
-            emptyButton("Clear all") { clipboard.clear() }
-        }
-    }
-
-    private func emptyButton(_ title: String, action: @escaping () -> Void) -> some View {
-        Button {
-            withAnimation(reduceMotion ? nil : Self.open, action)
-        } label: {
-            Text(title)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.white.opacity(0.85))
-                .padding(.horizontal, 10)
-                .frame(height: 26)
-                .background(.white.opacity(0.1), in: Capsule())
-                .contentShape(Capsule())
-        }
-        .buttonStyle(Press(reduceMotion: reduceMotion))
     }
 
     // No tab bar when both extra tabs are turned off.
@@ -718,6 +710,7 @@ private struct PillView: View {
         HStack(spacing: 2) {
             ForEach(shown, id: \.self) { tab in
                 Button {
+                    state.query = ""
                     withAnimation(reduceMotion ? nil : Self.open) { state.tab = tab }
                 } label: {
                     Image(systemName: tab.symbol)
@@ -903,22 +896,90 @@ private struct EmptySlot: View {
     }
 }
 
-// The shelf tab: the parked files in a row. Click one to open it, drag it out to use it, the cross to take it off.
+// Over a tab's content: a search field, and one button that empties the tab. The button is always there,
+// dimmed while there is nothing to remove.
+private struct TabTools: View {
+    let prompt: String
+    @Binding var query: String
+    let remove: String
+    let isEmpty: Bool
+    let reduceMotion: Bool
+    let action: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass").font(.system(size: 11, weight: .semibold)).foregroundStyle(.white.opacity(0.5))
+                TextField(prompt, text: $query)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white)
+                if !query.isEmpty {
+                    Button { query = "" } label: {
+                        Image(systemName: "xmark.circle.fill").font(.system(size: 11)).foregroundStyle(.white.opacity(0.5))
+                    }
+                    .buttonStyle(Press(reduceMotion: reduceMotion))
+                    .accessibilityLabel("Clear search")
+                }
+            }
+            .padding(.horizontal, 10)
+            .frame(height: 26)
+            .background(.white.opacity(0.08), in: Capsule())
+            .disabled(isEmpty)
+            Button {
+                withAnimation(reduceMotion ? nil : PillView.open, action)
+            } label: {
+                Text(remove)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.85))
+                    .padding(.horizontal, 10)
+                    .frame(height: 26)
+                    .background(.white.opacity(0.1), in: Capsule())
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(Press(reduceMotion: reduceMotion))
+            .disabled(isEmpty)
+            .opacity(isEmpty ? 0.4 : 1)
+        }
+        .environment(\.colorScheme, .dark)   // the pill is always dark, whatever the system wears
+    }
+}
+
+// What a tab says when a search finds nothing in it.
+private func noMatches(_ query: String) -> some View {
+    Text("Nothing matches “\(query)”")
+        .font(.system(size: 12, weight: .medium))
+        .foregroundStyle(.white.opacity(0.5))
+        .lineLimit(1)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+}
+
+// The shelf tab: its tools, then the parked files in a row. Click one to open it, drag it out to use it,
+// the cross to take it off.
 private struct ShelfView: View {
     @ObservedObject var shelf: Shelf
+    @Binding var query: String
     let dropping: Bool
     let tint: Color
     let reduceMotion: Bool
 
+    private var found: [URL] {
+        query.isEmpty ? shelf.files : shelf.files.filter { $0.lastPathComponent.localizedCaseInsensitiveContains(query) }
+    }
+
     var body: some View {
-        Group {
+        VStack(spacing: 8) {
+            TabTools(prompt: "Search files", query: $query, remove: "Remove all", isEmpty: shelf.files.isEmpty,
+                     reduceMotion: reduceMotion) { shelf.removeAll() }
             if shelf.files.isEmpty {
                 EmptySlot(symbol: "tray.and.arrow.down", title: "Drop files here",
                           detail: "They stay where they are. Drag one out to use it.", lit: dropping, tint: tint)
+            } else if found.isEmpty {
+                noMatches(query)
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
-                        ForEach(shelf.files, id: \.self) { file in
+                        ForEach(found, id: \.self) { file in
                             Button { NSWorkspace.shared.open(file) } label: {
                                 VStack(spacing: 4) {
                                     Image(nsImage: NSWorkspace.shared.icon(forFile: file.path)).resizable().frame(width: 44, height: 44)
@@ -956,22 +1017,32 @@ private struct ShelfView: View {
     }
 }
 
-// The clipboard tab: what was copied lately, newest first, each marked by what it is. Click one to copy it again.
+// The clipboard tab: its tools, then what was copied lately, newest first, each marked by what it is.
+// Click one to copy it again.
 private struct ClipboardView: View {
     @ObservedObject var clipboard: Clipboard
+    @Binding var query: String
     let tint: Color
     let reduceMotion: Bool
     @State private var copied: String?   // the row just clicked, ticked for a moment
 
+    private var found: [String] {
+        query.isEmpty ? clipboard.items : clipboard.items.filter { $0.localizedCaseInsensitiveContains(query) }
+    }
+
     var body: some View {
-        Group {
+        VStack(spacing: 8) {
+            TabTools(prompt: "Search copies", query: $query, remove: "Clear all", isEmpty: clipboard.items.isEmpty,
+                     reduceMotion: reduceMotion) { clipboard.clear() }
             if clipboard.items.isEmpty {
                 EmptySlot(symbol: "doc.on.clipboard", title: "Nothing copied yet",
                           detail: "What you copy shows up here. Click one to copy it again.", tint: tint)
+            } else if found.isEmpty {
+                noMatches(query)
             } else {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: Pill.clipGap) {
-                        ForEach(clipboard.items, id: \.self) { text in row(text) }
+                        ForEach(found, id: \.self) { text in row(text) }
                     }
                 }
             }
