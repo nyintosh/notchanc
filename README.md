@@ -18,24 +18,24 @@
 
 ## What it does
 
-When your AirPods switch to **Noise Cancellation**, a black pill appears around the notch with a moon icon. When they switch back to Transparency or Off, it fades away.
+When your AirPods switch to **Noise Cancellation**, a black pill appears around the notch, washed in the colour you chose, with a moon icon or the playing app's icon. When they switch back to Transparency or Off, it fades away.
 
 <p align="center">
-  <img src="docs/images/notch-collapsed.png" width="290" alt="The collapsed pill beside the notch: a moon on the left, a waveform on the right">
+  <img src="docs/images/notch-collapsed.png" width="324" alt="The collapsed pill beside the notch: the playing app's icon on the left, the visualizer on the right">
 </p>
 
-Hover it and it opens into a small player: the playing app's icon, the title and artist, a progress bar, and previous, play/pause and next. The pill's icons travel into the player, so the two read as one piece. With nothing playing it widens to show Noise Cancellation on the left and the track on the right.
+Hover it and it opens into one card. On top, the listening mode and where sound is going. Then the player: the playing app's icon, the title and artist, a progress bar, and previous, play/pause and next. Under it, tiles worth a glance: your next event, the Mac's battery, a quick timer. The pill's icons travel into the card, so the two read as one piece.
 
 <p align="center">
-  <img src="docs/images/notch-hover.png" width="618" alt="The hovered pill: NOISE CANCELLATION ON on the left of the notch, Weightless — Marconi Union on the right">
+  <img src="docs/images/notch-hover.png" width="671" alt="The hovered pill: Noise Cancellation on and the output device, the player showing Midnight Drive, and tiles for the next event, the Mac and a timer">
 </p>
 
-On displays without a notch, such as an external monitor, the pill sits centred in the menu bar and scrolls instead. Hovering swaps in the current track.
+On displays without a notch, such as an external monitor, the pill sits centred in the menu bar with the track's name, as wide as it needs. Hovering opens the same card.
 
 <p align="center">
-  <img src="docs/images/display-anc.png" width="386" alt="Pill on an external display scrolling NOISE CANCELLATION ON">
+  <img src="docs/images/display-anc.png" width="271" alt="Pill on an external display showing Midnight Drive — The Stand-Ins">
   <br>
-  <img src="docs/images/display-hover.png" width="386" alt="The same pill while hovered, showing Weightless — Marconi Union">
+  <img src="docs/images/display-hover.png" width="670" alt="The same pill while hovered: the card with status, player and tiles">
 </p>
 
 ### Features

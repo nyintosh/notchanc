@@ -452,9 +452,8 @@ private struct PillView: View {
         let stateOpacity: Double = open ? (mode == .anc ? 1 : 0) : state.track != nil ? 0 : idle ? 0.45 : 1
         return ZStack {
             if state.track != nil {
-                Image(nsImage: state.appIcon ?? NSImage(systemSymbolName: "music.note", accessibilityDescription: nil) ?? NSImage())
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
+                art
+                    .aspectRatio(1, contentMode: .fit)
                     .matchedGeometryEffect(id: Spot.art, in: space, isSource: false)
                     .scaleEffect(opening ? 0.95 : 1)
                     .animation(reduceMotion ? nil : Self.press, value: opening)
@@ -468,6 +467,23 @@ private struct PillView: View {
                 .matchedGeometryEffect(id: Spot.state, in: space, isSource: false)
         }
         .allowsHitTesting(false)
+    }
+
+    // The player app's icon; a note on a tile for a player that has none.
+    @ViewBuilder private var art: some View {
+        if let icon = state.appIcon {
+            Image(nsImage: icon).resizable()
+        } else {
+            GeometryReader { g in
+                RoundedRectangle(cornerRadius: g.size.height * 0.23, style: .continuous)
+                    .fill(.white.opacity(0.12))
+                    .overlay {
+                        Image(systemName: "music.note")
+                            .font(.system(size: g.size.height * 0.5, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.8))
+                    }
+            }
+        }
     }
 
     private enum Spot { case art, state }
