@@ -42,6 +42,14 @@ final class Clipboard: ObservableObject {
     // Forgets the history but not the pins; whatever is on the pasteboard itself stays there.
     func clear() { items = [] }
 
+    // Takes one copy out, pinned or not.
+    func remove(_ text: String) {
+        items.removeAll { $0 == text }
+        guard pinned.contains(text) else { return }
+        pinned.removeAll { $0 == text }
+        UserDefaults.standard.set(pinned, forKey: Self.pinnedKey)
+    }
+
     func togglePin(_ text: String) {
         (pinned, items) = Self.togglingPin(text, pinned: pinned, items: items)
         UserDefaults.standard.set(pinned, forKey: Self.pinnedKey)

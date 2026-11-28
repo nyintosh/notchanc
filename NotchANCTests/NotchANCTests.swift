@@ -208,6 +208,16 @@ struct LayoutTests {
         #expect(l.open == NSRect(x: 1720 - 300, y: 1416, width: 600, height: 24))
     }
 
+    // The clipboard list grows with its copies and their section headers, up to four rows' height
+    // (a row is 30, a gap 6, a header 16).
+    @Test func clipList() {
+        #expect(PillLayout.clipList(pinned: 0, recent: 1) == 30)
+        #expect(PillLayout.clipList(pinned: 0, recent: 2) == 66)
+        #expect(PillLayout.clipList(pinned: 1, recent: 0) == 52)
+        #expect(PillLayout.clipList(pinned: 1, recent: 1) == 110)
+        #expect(PillLayout.clipList(pinned: 3, recent: 9) == 138)
+    }
+
     // Without a cutout the bar hugs its content (16 edge, 20 icon, 12 gap) and stops growing at the widest text.
     @Test func barWidth() {
         #expect(PillLayout.barWidth(text: nil, trailing: nil) == 52)

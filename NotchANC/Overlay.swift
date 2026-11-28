@@ -88,6 +88,20 @@ struct PillLayout: Equatable {
         open = NSRect(x: bar.midX - width / 2, y: bar.minY, width: width, height: h)
     }
 
+    static let clipRow: CGFloat = 30    // one copy in the clipboard tab
+    static let clipGap: CGFloat = 6
+    static let clipRows = 4             // shown before the list scrolls
+    static let clipHeader: CGFloat = 16 // "Pinned" and "Recent" over their rows
+
+    // The clipboard list's height: its rows, plus a header over the pinned ones and, if both kinds show, one over
+    // the recent ones; never more than four rows' worth, after which it scrolls.
+    static func clipList(pinned: Int, recent: Int) -> CGFloat {
+        let rows = CGFloat(pinned + recent)
+        let headers: CGFloat = pinned == 0 ? 0 : recent == 0 ? 1 : 2
+        let list = rows * clipRow + (rows + headers - 1) * clipGap + headers * clipHeader
+        return min(list, CGFloat(clipRows) * clipRow + CGFloat(clipRows - 1) * clipGap)
+    }
+
     // Without a cutout the bar hugs what it holds: the icon, the text if any, and the mark on the right if any.
     static func barWidth(text: CGFloat?, trailing: CGFloat?) -> CGFloat {
         edge + icon + (text.map { gap + min($0, maxText) } ?? 0) + (trailing.map { gap + $0 } ?? 0) + edge
@@ -313,23 +327,19 @@ private final class Pill {
     // The card under the bar: the chips, a hairline, the player if there is a track, then the tiles.
     static let tools: CGFloat = 26 + 8  // the search field and the remove button over a tab's content, and the gap under them
     static let shelf = tilesGap + tools + 84 + 14   // the shelf tab: its tools, then one row of files or the drop zone
-    static let clipRow: CGFloat = 30    // one copy in the clipboard tab
-    static let clipGap: CGFloat = 6
-    static let clipRows = 4             // shown before the list scrolls
 
-    // The clipboard tab is as tall as its copies, up to four; empty, it is the shelf's size, for the same kind of box.
-    static func clipboard(_ copies: Int) -> CGFloat {
-        guard copies > 0 else { return shelf }
-        let rows = CGFloat(min(copies, clipRows))
-        return tilesGap + tools + rows * clipRow + (rows - 1) * clipGap + 12
+    // The clipboard tab is as tall as its list; empty, it is the shelf's size, for the same kind of box.
+    static func clipboard(pinned: Int, recent: Int) -> CGFloat {
+        guard pinned + recent > 0 else { return shelf }
+        return tilesGap + tools + PillLayout.clipList(pinned: pinned, recent: recent) + 12
     }
 
     // Under the chips and the hairline, each tab takes only the room its content needs.
-    static func card(_ track: Track?, _ tab: CardTab, copies: Int) -> CGFloat {
+    static func card(_ track: Track?, _ tab: CardTab, pinned: Int, recent: Int) -> CGFloat {
         switch tab {
         case .now: chips + 1 + (track == nil ? tilesGap : player) + tiles
         case .shelf: chips + 1 + shelf
-        case .clipboard: chips + 1 + clipboard(copies)
+        case .clipboard: chips + 1 + clipboard(pinned: pinned, recent: recent)
         }
     }
 
@@ -353,7 +363,7 @@ private final class Pill {
     // the pill is centred in it and fills only what's shown.
     var hitRect: NSRect {
         let w = state.expanded ? layout.open.width : Self.barWidth(layout, mode, state.track, counting: countdown.session != nil, rang: countdown.rang)
-        let h = layout.bar.height + (state.expanded ? Self.card(state.track, state.tab, copies: clipboard.all.count) : 0)
+        let h = layout.bar.height + (state.expanded ? Self.card(state.track, state.tab, pinned: clipboard.pinned.count, recent: clipboard.items.count) : 0)
         let f = window.frame
         return NSRect(x: f.midX - w / 2, y: f.maxY - h, width: w, height: h)
             .insetBy(dx: 0, dy: -2)   // the pointer can sit on the screen's top edge
@@ -499,7 +509,7 @@ private struct PillView: View {
 
     var body: some View {
         let h = layout.bar.height
-        let card = Pill.card(state.track, state.tab, copies: clipboard.all.count)
+        let card = Pill.card(state.track, state.tab, pinned: clipboard.pinned.count, recent: clipboard.items.count)
         let width = open ? layout.open.width : Pill.barWidth(layout, mode, state.track, counting: countdown.session != nil, rang: countdown.rang)
         let radius: CGFloat = open ? 24 : min(13, h / 2 - 1)   // a 24pt menu bar can't take 13pt corners
         let shape = UnevenRoundedRectangle(bottomLeadingRadius: radius, bottomTrailingRadius: radius)
@@ -692,7 +702,7 @@ private struct PillView: View {
                     .frame(height: Pill.shelf)
             case .clipboard:
                 ClipboardView(clipboard: clipboard, query: $state.query, tint: tint, reduceMotion: reduceMotion)
-                    .frame(height: Pill.clipboard(clipboard.all.count))
+                    .frame(height: Pill.clipboard(pinned: clipboard.pinned.count, recent: clipboard.items.count))
             }
         }
         .padding(.horizontal, Self.margin)
@@ -1019,7 +1029,7 @@ private struct ShelfView: View {
 }
 
 // The clipboard tab: its tools, then the pinned copies and what was copied lately, newest first, each marked by
-// what it is. Click one to copy it again; its pin keeps it. Clear all leaves the pinned ones.
+// what it is. Click one to copy it again; its pin keeps it, its cross deletes it. Clear all leaves the pinned ones.
 private struct ClipboardView: View {
     @ObservedObject var clipboard: Clipboard
     @Binding var query: String
@@ -1027,8 +1037,8 @@ private struct ClipboardView: View {
     let reduceMotion: Bool
     @State private var copied: String?   // the row just clicked, ticked for a moment
 
-    private var found: [String] {
-        query.isEmpty ? clipboard.all : clipboard.all.filter { $0.localizedCaseInsensitiveContains(query) }
+    private func found(in copies: [String]) -> [String] {
+        query.isEmpty ? copies : copies.filter { $0.localizedCaseInsensitiveContains(query) }
     }
 
     var body: some View {
@@ -1038,18 +1048,38 @@ private struct ClipboardView: View {
             if clipboard.all.isEmpty {
                 EmptySlot(symbol: "doc.on.clipboard", title: "Nothing copied yet",
                           detail: "What you copy shows up here. Click one to copy it again.", tint: tint)
-            } else if found.isEmpty {
+            } else if found(in: clipboard.all).isEmpty {
                 noMatches(query)
             } else {
+                // Pinned copies in a section of their own, on top; the recent ones are named only when both show.
+                let pinned = found(in: clipboard.pinned), recent = found(in: clipboard.items)
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: Pill.clipGap) {
-                        ForEach(found, id: \.self) { text in row(text) }
+                    VStack(spacing: PillLayout.clipGap) {
+                        if !pinned.isEmpty {
+                            header("pin.fill", "Pinned")
+                            ForEach(pinned, id: \.self) { text in row(text) }
+                        }
+                        if !recent.isEmpty {
+                            if !clipboard.pinned.isEmpty { header("clock", "Recent") }
+                            ForEach(recent, id: \.self) { text in row(text) }
+                        }
                     }
                 }
             }
         }
         .padding(.top, Pill.tilesGap)
         .padding(.bottom, clipboard.all.isEmpty ? 14 : 12)
+    }
+
+    private func header(_ symbol: String, _ title: String) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: symbol).font(.system(size: 9, weight: .semibold))
+            Text(title).font(.system(size: 10, weight: .semibold))
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(.white.opacity(0.5))
+        .padding(.leading, 4)
+        .frame(height: PillLayout.clipHeader)
     }
 
     private func row(_ text: String) -> some View {
@@ -1066,7 +1096,7 @@ private struct ClipboardView: View {
                     Spacer(minLength: 8)
                 }
                 .padding(.leading, 10)
-                .frame(height: Pill.clipRow)
+                .frame(height: PillLayout.clipRow)
                 .contentShape(Rectangle())
             }
             .buttonStyle(Press(reduceMotion: reduceMotion))
@@ -1077,7 +1107,7 @@ private struct ClipboardView: View {
                 Image(systemName: isPinned ? "pin.fill" : "pin")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(isPinned ? tint : .white.opacity(0.4))
-                    .frame(width: 28, height: Pill.clipRow)
+                    .frame(width: 28, height: PillLayout.clipRow)
                     .contentShape(Rectangle())
             }
             .buttonStyle(Press(reduceMotion: reduceMotion))
@@ -1086,8 +1116,18 @@ private struct ClipboardView: View {
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(copied == text ? tint : .white.opacity(0.4))
                 .frame(width: 24)
-                .padding(.trailing, 6)
                 .accessibilityHidden(true)
+            Button {
+                withAnimation(reduceMotion ? nil : PillView.open) { clipboard.remove(text) }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.4))
+                    .frame(width: 28, height: PillLayout.clipRow)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(Press(reduceMotion: reduceMotion))
+            .accessibilityLabel("Delete")
         }
         .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
     }
