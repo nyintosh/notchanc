@@ -2,8 +2,8 @@
 // AirPods Noise Cancellation on, or Now Playing while it's off.
 // Collapsed, the playing app's icon (or the state's, with no track) sits on the left and the visualizer on the right;
 // without a cutout the track's text sits between them and the bar hugs it.
-// Hovering opens one card: status chips (Noise Cancellation, where sound is going) above the Now Playing player,
-// or with no track above tiles of things worth a glance.
+// Hovering opens one card: status chips (Noise Cancellation, where sound is going), the Now Playing player when
+// there is a track, and tiles of things worth a glance.
 // The collapsed pill's icons travel into the card, and the visualizer rides its edge.
 
 import Cocoa
@@ -238,8 +238,9 @@ private final class PillState: ObservableObject {
 
 private final class Pill {
     static let chips: CGFloat = 40     // the status row at the top of the card
-    static let player: CGFloat = 84    // the Now Playing row under it, or the tiles with no track
-    static let card = chips + 1 + player   // the card under the bar: the chips, a hairline, then the player or the tiles
+    static let player: CGFloat = 84    // the Now Playing row under it
+    static let tilesGap: CGFloat = 10  // above the tiles when no player sits there
+    static let tiles = Tiles.height + 12   // the tiles and the room under them
     static let shadow: CGFloat = 40    // room around the open card for its shadow, so the window never cuts it
     static let font = NSFont.systemFont(ofSize: 11, weight: .semibold)
     static let openDelay: TimeInterval = 0.12
@@ -256,6 +257,9 @@ private final class Pill {
     var expanded: Bool { state.expanded }
     var openTimer: Timer?
     var collapseTimer: Timer?
+
+    // The card under the bar: the chips, a hairline, the player if there is a track, then the tiles.
+    static func card(_ track: Track?) -> CGFloat { chips + 1 + (track == nil ? tilesGap : player) + tiles }
 
     // What the bar says on a display without a cutout.
     static func barText(_ mode: PillMode, _ track: Track?) -> String? { track?.text ?? (mode == .anc ? mode.label : nil) }
@@ -275,7 +279,7 @@ private final class Pill {
     // the pill is centred in it and fills only what's shown.
     var hitRect: NSRect {
         let w = state.expanded ? layout.open.width : Self.barWidth(layout, mode, state.track)
-        let h = layout.bar.height + (state.expanded ? Self.card : 0)
+        let h = layout.bar.height + (state.expanded ? Self.card(state.track) : 0)
         let f = window.frame
         return NSRect(x: f.midX - w / 2, y: f.maxY - h, width: w, height: h)
             .insetBy(dx: 0, dy: -2)   // the pointer can sit on the screen's top edge
@@ -288,7 +292,7 @@ private final class Pill {
         uuid = screen.uuid
         state = PillState(output: output, expanded: expanded)
         self.onCommand = onCommand
-        let below = Self.card + Self.shadow
+        let below = Self.chips + 1 + Self.player + Self.tiles + Self.shadow
         var frame = layout.open.insetBy(dx: -Self.shadow, dy: 0)
         frame.origin.y -= below
         frame.size.height += below
@@ -392,7 +396,7 @@ private struct PillView: View {
 
     var body: some View {
         let h = layout.bar.height
-        let card = Pill.card
+        let card = Pill.card(state.track)
         let width = open ? layout.open.width : Pill.barWidth(layout, mode, state.track)
         let radius: CGFloat = open ? 24 : min(13, h / 2 - 1)   // a 24pt menu bar can't take 13pt corners
         let shape = UnevenRoundedRectangle(bottomLeadingRadius: radius, bottomTrailingRadius: radius)
@@ -504,7 +508,7 @@ private struct PillView: View {
         }
     }
 
-    // Status chips, a hairline, then the player or, with no track, the tiles.
+    // Status chips, a hairline, the player if there is a track, then the tiles.
     private var card: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
@@ -526,8 +530,9 @@ private struct PillView: View {
             if let track = state.track {
                 player(track).frame(height: Pill.player)
             } else {
-                Tiles(glance: glance, tint: tint).frame(height: Pill.player)
+                Color.clear.frame(height: Pill.tilesGap)
             }
+            Tiles(glance: glance, tint: tint).frame(height: Pill.tiles, alignment: .top)
         }
         .padding(.horizontal, Self.margin)
     }
@@ -563,10 +568,12 @@ private struct PillView: View {
                         .matchedGeometryEffect(id: Spot.art, in: space, isSource: open)
                     VStack(alignment: .leading, spacing: 2) {
                         Title(text: track.title, reduceMotion: reduceMotion)
-                        Text(track.artist)
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.7))
-                            .lineLimit(1)
+                        if !track.artist.isEmpty {   // a browser tab often names no artist; no empty line then
+                            Text(track.artist)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.7))
+                                .lineLimit(1)
+                        }
                         TimelineView(.periodic(from: .now, by: 1)) { context in
                             progress(track, at: context.date)
                         }
@@ -634,8 +641,9 @@ private struct PillView: View {
     }
 }
 
-// What the card shows with no track: one small tile per thing worth a glance. Only this view redraws as readings change.
+// The card's last row: one small tile per thing worth a glance. Only this view redraws as readings change.
 private struct Tiles: View {
+    static let height: CGFloat = 64
     static let spacing: CGFloat = 8
     static let width = (PillLayout.cardWidth - 2 * PillView.margin - 3 * spacing) / 4   // room for four in a row
 
@@ -670,7 +678,7 @@ private struct Tiles: View {
             }
         }
         .padding(10)
-        .frame(width: Self.width, height: 64, alignment: .topLeading)
+        .frame(width: Self.width, height: Self.height, alignment: .topLeading)
         .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .accessibilityElement(children: .combine)
     }
