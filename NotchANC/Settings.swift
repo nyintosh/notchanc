@@ -57,6 +57,7 @@ private struct GeneralTab: View {
             LabeledContent("Detection") {
                 Toggle("Read the mode from AirPods", isOn: $automatic)
             }
+            Divider().padding(.vertical, 8)
             LabeledContent("Startup") {
                 Toggle("Open at login", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, on in
@@ -65,6 +66,7 @@ private struct GeneralTab: View {
                         launchAtLogin = SMAppService.mainApp.status == .enabled
                     }
             }
+            Divider().padding(.vertical, 8)
             LabeledContent("Menu bar icon") {
                 VStack(alignment: .leading, spacing: 6) {
                     IconPicker(selection: $menuBarIcon, icons: menuBarIcons, tint: .primary)
@@ -77,6 +79,7 @@ private struct GeneralTab: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
+            Divider().padding(.vertical, 8)
             LabeledContent("Updates") {
                 Toggle("Check automatically", isOn: $autoUpdate)
                     .onChange(of: autoUpdate) { _, on in updater.automaticallyChecksForUpdates = on }
@@ -96,6 +99,7 @@ private struct AppearanceTab: View {
             LabeledContent("Noise Cancellation") {
                 StyleEditor(mode: .anc)
             }
+            Divider().padding(.vertical, 8)
             LabeledContent("Now Playing") {
                 VStack(alignment: .leading, spacing: 8) {
                     Picker("Show", selection: $visibility) {
@@ -106,6 +110,7 @@ private struct AppearanceTab: View {
                     StyleEditor(mode: .media).disabled(visibility == .never)
                 }
             }
+            Divider().padding(.vertical, 8)
             LabeledContent("Show on") {
                 VStack(alignment: .leading, spacing: 6) {
                     ForEach(screens, id: \.self) { s in
