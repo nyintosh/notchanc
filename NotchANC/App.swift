@@ -1,6 +1,31 @@
 import Cocoa
 import Sparkle
 
+// When the Now Playing pill shows while Noise Cancellation is off.
+enum MediaVisibility: String, CaseIterable {
+    case never, headphones, anyOutput, always
+
+    static let key = "mediaVisibility"
+
+    var title: String {
+        switch self {
+        case .never: "Never"
+        case .headphones: "With headphones"
+        case .anyOutput: "With any output"
+        case .always: "Always"
+        }
+    }
+
+    func shows(playing: Bool, toHeadphones: Bool) -> Bool {
+        switch self {
+        case .never: false
+        case .headphones: playing && toHeadphones
+        case .anyOutput: playing
+        case .always: true
+        }
+    }
+}
+
 @main
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let overlay = NotchOverlay()
@@ -18,7 +43,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var track: Track?
     private var hideMedia: DispatchWorkItem?
     private var look: [String] = []   // every state's colour and icon, to notice changes
-    private var showMedia = true
+    private var visibility = MediaVisibility.headphones
     private var iconHidden = false
 
     static func main() {
@@ -29,13 +54,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ n: Notification) {
-        defaults.register(defaults: PillMode.allCases.reduce(["automatic": true, "showMedia": true, "menuBarIcon": menuBarIcons[0]]) {
+        defaults.register(defaults: PillMode.allCases.reduce(["automatic": true, MediaVisibility.key: MediaVisibility.headphones.rawValue, "menuBarIcon": menuBarIcons[0]]) {
             $0.merging($1.defaults) { a, _ in a }
         })
         // 1.0.0–1.0.3 kept one accent colour as an index into five swatches.
         if let i = defaults.object(forKey: "accentColor") as? Int {
             defaults.set(["#FF9F0A", "#30D158", "#0A84FF", "#BF5AF2", "#FF375F"][min(max(i, 0), 4)], forKey: PillMode.anc.colorKey)
             defaults.removeObject(forKey: "accentColor")
+        }
+        // 1.0.4–1.0.6 kept an on/off switch for the Now Playing pill.
+        if let on = defaults.object(forKey: "showMedia") as? Bool {
+            if !on { defaults.set(MediaVisibility.never.rawValue, forKey: MediaVisibility.key) }
+            defaults.removeObject(forKey: "showMedia")
         }
 
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -135,8 +165,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             setStatusIcon(on: ancOn)
         }
 
-        if showMedia != defaults.bool(forKey: "showMedia") {
-            showMedia.toggle()
+        let visibility = defaults.string(forKey: MediaVisibility.key).flatMap(MediaVisibility.init) ?? .headphones
+        if visibility != self.visibility {
+            self.visibility = visibility
             updatePill()
         }
     }
@@ -161,10 +192,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updatePill()
     }
 
-    // ANC wins; otherwise the pill shows while media plays into headphones (unless turned off in Settings).
+    // ANC wins; otherwise Settings decide when the Now Playing pill shows.
     private func updatePill() {
         hideMedia?.cancel()
-        let mode: PillMode? = ancOn ? .anc : (showMedia && track?.playing == true && output.toHeadphones ? .media : nil)
+        let mode: PillMode? = ancOn ? .anc : (visibility.shows(playing: track?.playing == true, toHeadphones: output.toHeadphones) ? .media : nil)
         guard mode == nil, overlay.mode == .media else { overlay.mode = mode; return }
         // Players report "paused" for a moment between tracks; don't flash the pill.
         let work = DispatchWorkItem { [weak self] in self?.overlay.mode = nil }

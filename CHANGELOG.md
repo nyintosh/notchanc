@@ -1,5 +1,8 @@
 # Changelog
 
+## [1.0.7]
+- **Choose when the Now Playing pill shows.** Settings › Appearance now offers Never, With headphones, With any output and Always. With any output also shows it for the Mac's speakers; Always keeps the pill in place even when nothing plays.
+
 ## [1.0.6]
 - **Click the track to go to it.** Clicking the player's icon or title brings the playing app forward, and in a browser switches to the tab that's playing. macOS asks once per browser.
 - **Control what's playing.** Hover the pill and it opens into a small player with the app's icon, title, artist, progress, and previous, play/pause and next. Play/pause changes the moment you press it.

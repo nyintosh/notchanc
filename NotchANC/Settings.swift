@@ -87,7 +87,7 @@ private struct GeneralTab: View {
 }
 
 private struct AppearanceTab: View {
-    @AppStorage("showMedia") private var showMedia = true
+    @AppStorage(MediaVisibility.key) private var visibility = MediaVisibility.headphones
     @State private var hidden = Set(UserDefaults.standard.stringArray(forKey: "hiddenDisplays") ?? [])
     @State private var screens = NSScreen.screens
 
@@ -98,8 +98,12 @@ private struct AppearanceTab: View {
             }
             LabeledContent("Now Playing") {
                 VStack(alignment: .leading, spacing: 8) {
-                    Toggle("Show while media plays through headphones", isOn: $showMedia)
-                    StyleEditor(mode: .media).disabled(!showMedia)
+                    Picker("Show", selection: $visibility) {
+                        ForEach(MediaVisibility.allCases, id: \.self) { Text($0.title) }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                    StyleEditor(mode: .media).disabled(visibility == .never)
                 }
             }
             LabeledContent("Show on") {

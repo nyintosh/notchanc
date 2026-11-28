@@ -4,12 +4,12 @@ How the parts fit, and the facts that are easy to get wrong. The README covers w
 
 ## How the parts fit
 
-- `NotchANC/App.swift`: menu, Sparkle, and `apply()`, which reacts to every UserDefaults change (keys `automatic`, `showMedia`, `menuBarIcon`, `hiddenDisplays`, `hideMenuBarIcon`, and per `PillMode` its `colorKey` hex and `iconKey` symbol). Reopening the app shows Settings.
+- `NotchANC/App.swift`: menu, Sparkle, and `apply()`, which reacts to every UserDefaults change (keys `automatic`, `mediaVisibility`, `menuBarIcon`, `hiddenDisplays`, `hideMenuBarIcon`, and per `PillMode` its `colorKey` hex and `iconKey` symbol). Reopening the app shows Settings.
 - `NotchANC/Settings.swift`: Preferences window, an `NSTabViewController` (toolbar tabs) of SwiftUI forms that write UserDefaults directly.
 - `NotchANC/Overlay.swift`: `PillLayout` (pure geometry, unit-tested) and one window per shown display. The window has the expanded size; only the pill view inside animates. Beside a cutout, expanded = ANC label left, Now Playing right, both as wide as the ANC label. Without a cutout the pill is the original full marquee and hovering swaps in Now Playing at the same size. Hover uses mouse-moved event monitors. The window (a non-activating `NSPanel`) ignores clicks except while the pointer is on the pill, so right-click opens the status menu without stealing focus.
 - `NotchANC/AudioTap.swift`: the visualizer's levels. A Core Audio process tap of the whole output feeds a private aggregate device; each 1024-sample block is split into five log bands, and each bar rests at half height on its band's running average. It runs only while a shown pill has something playing.
 - `NotchANC/AirPodsMonitor.swift`: parses `bluetoothd` log lines (`LsnM <mode>` etc.); no public API exists.
-- `NotchANC/NowPlaying.swift`: MediaRemote refuses non-Apple processes since macOS 15.4, so a JXA loop in Apple's `/usr/bin/osascript` reads `MRNowPlayingRequest` and prints JSON lines. It runs for the app's lifetime: `AppDelegate.updatePill()` picks `PillMode.anc` (accent colour) when ANC is on, else `.media` (blue) while something plays into headphones (`AudioOutput`: Bluetooth transport or the jack's 'hdpn' data source), hiding 2 s after playback stops.
+- `NotchANC/NowPlaying.swift`: MediaRemote refuses non-Apple processes since macOS 15.4, so a JXA loop in Apple's `/usr/bin/osascript` reads `MRNowPlayingRequest` and prints JSON lines. It runs for the app's lifetime: `AppDelegate.updatePill()` picks `PillMode.anc` (accent colour) when ANC is on, else `.media` (blue) when `MediaVisibility` says so: never, while something plays into headphones (the default; `AudioOutput`: Bluetooth transport or the jack's 'hdpn' data source), while something plays into any output, or always. It hides 2 s after playback stops.
 
 ## Facts that are easy to get wrong
 

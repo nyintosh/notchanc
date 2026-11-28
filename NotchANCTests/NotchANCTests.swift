@@ -60,6 +60,19 @@ struct NowPlayingTests {
     }
 }
 
+struct MediaVisibilityTests {
+    @Test func shows() {
+        for playing in [false, true] {
+            for toHeadphones in [false, true] {
+                #expect(!MediaVisibility.never.shows(playing: playing, toHeadphones: toHeadphones))
+                #expect(MediaVisibility.headphones.shows(playing: playing, toHeadphones: toHeadphones) == (playing && toHeadphones))
+                #expect(MediaVisibility.anyOutput.shows(playing: playing, toHeadphones: toHeadphones) == playing)
+                #expect(MediaVisibility.always.shows(playing: playing, toHeadphones: toHeadphones))
+            }
+        }
+    }
+}
+
 struct ColorTests {
     @Test func hexRoundTrip() {
         for hex in ["#FF9F0A", "#0A84FF", "#000000", "#FFFFFF"] { #expect(NSColor(hex: hex)?.hex == hex) }
