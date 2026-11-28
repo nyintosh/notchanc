@@ -27,7 +27,7 @@ When your AirPods switch to **Noise Cancellation**, a black pill appears around 
 Hover it and it opens into one card. On top, the listening mode and where sound is going. Then the player: the playing app's icon, the title and artist, a progress bar, and previous, play/pause and next. Under it, tiles worth a glance: your next event, how busy the Mac is, a quick timer. Tabs on the right switch to a shelf for files and to your recent copies. The pill's icons travel into the card, so the two read as one piece.
 
 <p align="center">
-  <img src="docs/images/notch-hover.png" width="671" alt="The hovered pill: Noise Cancellation on, the output device and three tabs; the player showing Midnight Drive; tiles for the next event, four rings for the Mac, and a timer">
+  <img src="docs/images/notch-hover.png" width="671" alt="The hovered pill: Noise Cancellation on, the output device and three tabs; the player showing Midnight Drive; four rings for the Mac and a timer tile">
 </p>
 
 On displays without a notch, such as an external monitor, the pill sits centred in the menu bar with the track's name, as wide as it needs. Hovering opens the same card.
@@ -52,7 +52,7 @@ On displays without a notch, such as an external monitor, the pill sits centred 
 
 <p align="center">
   <img src="docs/images/settings-general.png" width="400" alt="Settings, General pane">
-  <img src="docs/images/settings-pill.png" width="400" alt="Settings, Pill pane">
+  <img src="docs/images/settings-pill.png" width="400" alt="Settings, Pill pane: colour and icon for each state, and when Now Playing shows">
 </p>
 
 ## Install
