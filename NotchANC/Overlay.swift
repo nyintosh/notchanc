@@ -1180,29 +1180,39 @@ private struct Tiles: View {
     }
 }
 
-// The visualizer as light: one soft swell per band along the pill's lower edge, low notes on the left,
-// rising and brightening with the sound. Only this view redraws as it moves.
+// The visualizer as light: one smooth wave along the pill's lower edge, low notes on the left, rising with the
+// sound and fading upwards. Only this view redraws as it moves.
 private struct Glow: View {
     @ObservedObject var tap: AudioTap
     let tint: Color
-    let bar: CGFloat   // the pill's height: the swells are sized to it, so a thin menu bar pill isn't flooded
+    let bar: CGFloat   // the pill's height: the wave is sized to it, so a thin menu bar pill isn't flooded
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: 0) {
-            ForEach(tap.levels.indices, id: \.self) { i in
-                let level = CGFloat(tap.levels[i])
-                Ellipse()
-                    .fill(tint)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: bar * (0.1 + level * 0.3))
-                    .opacity(0.1 + Double(level) * 0.35)
-            }
+        Wave(levels: tap.levels.map { CGFloat($0) })
+            .fill(LinearGradient(colors: [tint.opacity(0), tint.opacity(0.45)], startPoint: .top, endPoint: .bottom))
+            .frame(height: bar * 0.5)
+            .blur(radius: bar * 0.05)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+}
+
+// A curve through one height per band, flat at each so it reads as a wave, falling to nothing at both ends.
+private struct Wave: Shape {
+    let levels: [CGFloat]   // 0…1, left to right
+
+    func path(in rect: CGRect) -> Path {
+        let heights = [0] + levels + [0]
+        let step = rect.width / CGFloat(heights.count - 1)
+        let points = heights.enumerated().map { CGPoint(x: rect.minX + CGFloat($0.offset) * step, y: rect.maxY - $0.element * rect.height) }
+        var path = Path()
+        path.move(to: points[0])
+        for (from, to) in zip(points, points.dropFirst()) {
+            let middle = (from.x + to.x) / 2
+            path.addCurve(to: to, control1: CGPoint(x: middle, y: from.y), control2: CGPoint(x: middle, y: to.y))
         }
-        .blur(radius: bar * 0.15)
-        .offset(y: bar * 0.13)   // centred on the edge, so only the upper half of each swell shows
-        .animation(.linear(duration: 0.05), value: tap.levels)   // eases between the ~47 readings a second
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
+        path.closeSubpath()
+        return path
     }
 }
 
