@@ -492,6 +492,12 @@ private struct PillView: View {
             shape.fill(.black)
                 .frame(width: width, height: h + (open ? card : 0))
                 .overlay { LinearGradient(colors: [.clear, tint.opacity(idle ? 0.16 : 0.32)], startPoint: .top, endPoint: .bottom) }
+                .overlay(alignment: .bottom) {
+                    // The countdown has the visualizer's place, so the sound shows as a glow along the lower edge.
+                    if playing, countdown.session != nil, !open, !reduceMotion {
+                        Glow(tap: tap, tint: tint, bar: h).frame(width: width)
+                    }
+                }
                 .overlay(alignment: .top) {
                     self.card
                         .frame(width: layout.open.width, height: card)
@@ -1171,6 +1177,32 @@ private struct Tiles: View {
             .padding(10)
             .frame(width: Self.width, height: Self.height, alignment: .topLeading)
             .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+}
+
+// The visualizer as light: one soft swell per band along the pill's lower edge, low notes on the left,
+// rising and brightening with the sound. Only this view redraws as it moves.
+private struct Glow: View {
+    @ObservedObject var tap: AudioTap
+    let tint: Color
+    let bar: CGFloat   // the pill's height: the swells are sized to it, so a thin menu bar pill isn't flooded
+
+    var body: some View {
+        HStack(alignment: .bottom, spacing: 0) {
+            ForEach(tap.levels.indices, id: \.self) { i in
+                let level = CGFloat(tap.levels[i])
+                Ellipse()
+                    .fill(tint)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: bar * (0.1 + level * 0.3))
+                    .opacity(0.1 + Double(level) * 0.35)
+            }
+        }
+        .blur(radius: bar * 0.15)
+        .offset(y: bar * 0.13)   // centred on the edge, so only the upper half of each swell shows
+        .animation(.linear(duration: 0.05), value: tap.levels)   // eases between the ~47 readings a second
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 
