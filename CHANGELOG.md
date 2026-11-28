@@ -1,6 +1,7 @@
 # Changelog
 
 ## [1.0.7]
+- **A new look for the pill.** It is washed in its state's colour, shows the playing app's icon, and a pause mark while paused. Hovering opens one card: Noise Cancellation and the output device on top, the player below. On a display without a notch the bar now hugs its text.
 - **Choose when the Now Playing pill shows.** Settings › Appearance now offers Never, With headphones, With any output and Always. With any output also shows it for the Mac's speakers; Always keeps the pill in place even when nothing plays.
 
 ## [1.0.6]

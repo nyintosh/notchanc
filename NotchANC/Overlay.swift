@@ -1,9 +1,9 @@
-// The pill around the camera cutout (notch or Dynamic Island), one per selected display, in its state's colour:
-// AirPods Noise Cancellation on, or media playing into headphones while it's off.
-// Collapsed, the state's icon and the visualizer ride its ends; without a cutout the track scrolls between them.
-// Hovering opens it. With a track it opens into the Now Playing player and the collapsed pill's parts travel into it:
-// the state icon becomes the badge on the player app's icon, which grows out of it, and the visualizer rides the edge.
-// Without a track it widens to show the labels beside the cutout.
+// The pill around the camera cutout (notch or Dynamic Island), one per selected display, washed in its state's colour:
+// AirPods Noise Cancellation on, or Now Playing while it's off.
+// Collapsed, the playing app's icon (or the state's, with no track) sits on the left and the visualizer on the right;
+// without a cutout the track's text sits between them and the bar hugs it.
+// Hovering opens one card: status chips (Noise Cancellation, where sound is going) above the Now Playing player.
+// The collapsed pill's icons travel into the card, and the visualizer rides its edge.
 
 import Cocoa
 import SwiftUI
@@ -22,7 +22,7 @@ let menuBarIcons = ["airpodspro", "airpods", "headphones", "beats.headphones", "
 enum PillMode: CaseIterable {
     case anc, media
 
-    var label: String { self == .anc ? "NOISE CANCELLATION ON" : "NOW PLAYING" }
+    var label: String { self == .anc ? "Noise Cancellation" : "Now Playing" }
     var colorKey: String { self == .anc ? "ancColor" : "mediaColor" }
     var iconKey: String { self == .anc ? "ancIcon" : "mediaIcon" }
     var defaults: [String: Any] {
@@ -56,37 +56,38 @@ extension NSColor {
 
 // Where the pill goes on one screen. macOS reports a notch and a Dynamic Island the same way:
 // a top safe-area inset plus the unobscured areas left and right of the camera.
-// The window always has the expanded size; only the pill inside it grows and shrinks.
 struct PillLayout: Equatable {
-    static let wing: CGFloat = 52
+    static let edge: CGFloat = 16   // from the pill's end to its icon
+    static let icon: CGFloat = 20
+    static let gap: CGFloat = 12    // between an icon and the text
+    static let wing = 2 * edge + icon   // the pill's reach each side of a cutout
+    static let maxText: CGFloat = 290
+    static let maxBar = 2 * (edge + icon + gap) + maxText   // the widest bar on a display without a cutout
+    static let cardWidth: CGFloat = 600   // wide and short: the pill spreads sideways as it opens
 
-    let window: NSRect      // screen coordinates
-    let collapsed: NSRect   // pill, window coordinates
-    let expanded: NSRect    // pill, window coordinates
-    let leftText: NSRect    // window coordinates
-    let rightText: NSRect   // window coordinates
+    let bar: NSRect    // the collapsed pill at its widest, screen coordinates
+    let open: NSRect   // the bar once the pill has opened, screen coordinates
     let middle: CGFloat     // the cutout's width (0 without one)
     let hasCutout: Bool
 
-    init(screen: NSRect, topInset: CGFloat, leftAux: NSRect, rightAux: NSRect, barHeight: CGFloat, textWidth tw: CGFloat) {
+    init(screen: NSRect, topInset: CGFloat, leftAux: NSRect, rightAux: NSRect, barHeight: CGFloat) {
         hasCutout = topInset > 0 && !leftAux.isEmpty && !rightAux.isEmpty
         let h = hasCutout ? topInset : barHeight
         if hasCutout {
             // Widths, not midX: correct for any cutout size or position.
             middle = screen.width - leftAux.width - rightAux.width
-            let side = 48 + tw + 10   // icon, text, gap before the cutout
-            window = NSRect(x: screen.minX + leftAux.width - side, y: screen.maxY - h, width: 2 * side + middle, height: h)
-            collapsed = NSRect(x: side - Self.wing, y: 0, width: 2 * Self.wing + middle, height: h)
-            leftText = NSRect(x: 48, y: 0, width: tw, height: h)
-            rightText = NSRect(x: window.width - 48 - tw, y: 0, width: tw, height: h)
+            bar = NSRect(x: screen.minX + leftAux.width - Self.wing, y: screen.maxY - h, width: 2 * Self.wing + middle, height: h)
         } else {
             middle = 0
-            window = NSRect(x: screen.midX - 193, y: screen.maxY - h, width: 386, height: h)
-            collapsed = NSRect(origin: .zero, size: window.size)
-            leftText = NSRect(x: 48, y: 0, width: 290, height: h)
-            rightText = leftText   // same place: hovering swaps one for the other
+            bar = NSRect(x: screen.midX - Self.maxBar / 2, y: screen.maxY - h, width: Self.maxBar, height: h)
         }
-        expanded = NSRect(origin: .zero, size: window.size)
+        let width = max(bar.width, Self.cardWidth)
+        open = NSRect(x: bar.midX - width / 2, y: bar.minY, width: width, height: h)
+    }
+
+    // Without a cutout the bar hugs what it holds: the icon, the text if any, and the mark on the right if any.
+    static func barWidth(text: CGFloat?, trailing: Bool) -> CGFloat {
+        edge + icon + (text.map { gap + min($0, maxText) } ?? 0) + (trailing ? gap + icon : 0) + edge
     }
 
     // ponytail: guesses by width since no API names the cutout; Island Macs ship narrower than every notch (~180pt+).
@@ -94,10 +95,10 @@ struct PillLayout: Equatable {
 }
 
 extension NSScreen {
-    func pillLayout(textWidth: CGFloat = 0) -> PillLayout {
+    func pillLayout() -> PillLayout {
         PillLayout(screen: frame, topInset: safeAreaInsets.top,
                    leftAux: auxiliaryTopLeftArea ?? .zero, rightAux: auxiliaryTopRightArea ?? .zero,
-                   barHeight: NSStatusBar.system.thickness, textWidth: textWidth)
+                   barHeight: NSStatusBar.system.thickness)
     }
 
     // Stable across reboots and reconnects, unlike the display ID.
@@ -117,6 +118,9 @@ final class NotchOverlay {
     var menu: NSMenu?   // right-click menu, the same one the menu bar icon shows
     var onCommand: ((MediaCommand) -> Void)?
     var onOpen: (() -> Void)?   // clicking the player's icon or title
+    var output = Output(name: "", headphones: false) {
+        didSet { if output != oldValue { pills.forEach { $0.setOutput(output) } } }
+    }
     var track: Track? {
         didSet {
             if track != oldValue { pills.forEach { $0.setTrack(track) } }
@@ -161,7 +165,7 @@ final class NotchOverlay {
         let open = Set(pills.filter(\.expanded).map(\.uuid))
         pills.forEach { $0.close() }
         pills = NSScreen.screens.filter { !hiddenDisplays.contains($0.uuid) }.map {
-            Pill(screen: $0, mode: mode, color: mode.color, track: track, expanded: open.contains($0.uuid), menu: menu, tap: tap,
+            Pill(screen: $0, mode: mode, color: mode.color, track: track, output: output, expanded: open.contains($0.uuid), menu: menu, tap: tap,
                  onCommand: { [weak self] in self?.onCommand?($0) }, onOpen: { [weak self] in self?.onOpen?() })
         }
         for p in pills {
@@ -215,16 +219,20 @@ final class NotchOverlay {
 private final class PillState: ObservableObject {
     @Published var track: Track?
     @Published var appIcon: NSImage?   // the player app's icon, shown in place of album art
+    @Published var output: Output
     @Published var expanded: Bool
 
-    init(expanded: Bool) { self.expanded = expanded }
+    init(output: Output, expanded: Bool) {
+        self.output = output
+        self.expanded = expanded
+    }
 }
 
 private final class Pill {
-    static let player: CGFloat = 92         // the Now Playing panel that opens below the bar
-    static let playerWidth: CGFloat = 600   // wide and short: the pill spreads sideways from the notch as it opens
-    static let shadow: CGFloat = 40         // room around the open player for its shadow, so the window never cuts it
-    static let below = player + shadow      // the window's reach below the bar
+    static let chips: CGFloat = 40     // the status row at the top of the card
+    static let player: CGFloat = 84    // the Now Playing row under it
+    static let empty: CGFloat = 48     // what takes the player's place with no track
+    static let shadow: CGFloat = 40    // room around the open card for its shadow, so the window never cuts it
     static let font = NSFont.systemFont(ofSize: 11, weight: .semibold)
     static let openDelay: TimeInterval = 0.12
     static let closeDelay: TimeInterval = 0.4
@@ -232,6 +240,7 @@ private final class Pill {
     let window: NSWindow
     let uuid: String
     private let layout: PillLayout
+    private let mode: PillMode
     private let state: PillState
     private let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
     private let onCommand: (MediaCommand) -> Void
@@ -240,31 +249,44 @@ private final class Pill {
     var openTimer: Timer?
     var collapseTimer: Timer?
 
-    // The window reaches below the bar and, if the player needs it, beyond the bar's sides;
+    // The card under the bar: the chips, a hairline, then the player or its stand-in.
+    static func card(_ track: Track?) -> CGFloat { chips + 1 + (track == nil ? empty : player) }
+
+    // What the bar says on a display without a cutout.
+    static func barText(_ mode: PillMode, _ track: Track?) -> String? { track?.text ?? (mode == .anc ? mode.label : nil) }
+
+    // Core Text measures fallback fonts too; NSAttributedString.size() doesn't.
+    static func textWidth(_ text: String) -> CGFloat {
+        let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: [.font: font]))
+        return ceil(CTLineGetTypographicBounds(line, nil, nil, nil)) + 2
+    }
+
+    static func barWidth(_ layout: PillLayout, _ mode: PillMode, _ track: Track?) -> CGFloat {
+        guard !layout.hasCutout else { return layout.bar.width }
+        return PillLayout.barWidth(text: barText(mode, track).map(textWidth), trailing: track != nil)
+    }
+
+    // The window reaches below the bar and beyond its sides for the card;
     // the pill is centred in it and fills only what's shown.
     var hitRect: NSRect {
-        let w = !state.expanded ? layout.collapsed.width : state.track == nil ? layout.expanded.width : Self.openWidth(layout)
-        let h = layout.window.height + (state.expanded && state.track != nil ? Self.player : 0)
+        let w = state.expanded ? layout.open.width : Self.barWidth(layout, mode, state.track)
+        let h = layout.bar.height + (state.expanded ? Self.card(state.track) : 0)
         let f = window.frame
         return NSRect(x: f.midX - w / 2, y: f.maxY - h, width: w, height: h)
             .insetBy(dx: 0, dy: -2)   // the pointer can sit on the screen's top edge
     }
 
-    // With a track the pill opens to the player; without one, to the full width of both labels.
-    static func openWidth(_ layout: PillLayout) -> CGFloat { max(layout.expanded.width, playerWidth) }
-
-    init(screen: NSScreen, mode: PillMode, color: NSColor, track: Track?, expanded: Bool, menu: NSMenu?, tap: AudioTap,
-         onCommand: @escaping (MediaCommand) -> Void, onOpen: @escaping () -> Void) {
-        // Sized by the ANC label in both modes, so switching modes never changes the pill's size.
-        let width = NSAttributedString(string: PillMode.anc.label, attributes: [.font: Self.font, .kern: 0.8]).size().width
-        layout = screen.pillLayout(textWidth: ceil(width))
+    init(screen: NSScreen, mode: PillMode, color: NSColor, track: Track?, output: Output, expanded: Bool, menu: NSMenu?,
+         tap: AudioTap, onCommand: @escaping (MediaCommand) -> Void, onOpen: @escaping () -> Void) {
+        layout = screen.pillLayout()
+        self.mode = mode
         uuid = screen.uuid
-        state = PillState(expanded: expanded)
+        state = PillState(output: output, expanded: expanded)
         self.onCommand = onCommand
-        var frame = layout.window
-        frame.origin.y -= Self.below
-        frame.size.height += Self.below
-        frame = frame.insetBy(dx: -max(0, Self.openWidth(layout) - frame.width) / 2 - Self.shadow, dy: 0)
+        let below = Self.chips + 1 + Self.player + Self.shadow
+        var frame = layout.open.insetBy(dx: -Self.shadow, dy: 0)
+        frame.origin.y -= below
+        frame.size.height += below
 
         // A non-activating panel: clicking the pill never takes focus from the app in front.
         let panel = NSPanel(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
@@ -283,7 +305,7 @@ private final class Pill {
         root.menu = menu
         window.contentView = root
 
-        let view = PillView(layout: layout, mode: mode, color: color, fixed: !layout.hasCutout && mode == .media,
+        let view = PillView(layout: layout, mode: mode, color: color,
                             reduceMotion: reduceMotion, state: state, tap: tap, onCommand: { [weak self] in self?.send($0) },
                             onOpen: onOpen)
         let host = FirstClickHostingView(rootView: view)
@@ -300,6 +322,8 @@ private final class Pill {
         }
         withAnimation(reduceMotion ? nil : PillView.open) { state.track = track }
     }
+
+    func setOutput(_ output: Output) { state.output = output }
 
     func setExpanded(_ on: Bool) {
         guard on != state.expanded else { return }
@@ -329,8 +353,9 @@ private final class FirstClickHostingView<Content: View>: NSHostingView<Content>
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }
 
-// Black pill flush with the top of the screen, bottom corners rounded. Its icons are one set that travels between
-// the collapsed bar and the open player, so both read as one object changing shape.
+// Black pill flush with the top of the screen, bottom corners rounded, washed in the state's colour towards its
+// lower edge (the top stays black, to meet the cutout). Its icons are one set that travels between
+// the collapsed bar and the open card, so both read as one object changing shape.
 // Springs with no bounce, so hovering out halfway turns the pill around
 // from where it is, and closing is quicker than opening. The icons move on the shape's clock; the text fades in
 // a beat later, once the icons have crossed it, and out at once.
@@ -345,7 +370,6 @@ private struct PillView: View {
     let layout: PillLayout
     let mode: PillMode
     let color: NSColor
-    let fixed: Bool   // media on a display without a cutout: the bar shows the track instead of the label
     let reduceMotion: Bool
     @ObservedObject var state: PillState
     let tap: AudioTap
@@ -354,40 +378,46 @@ private struct PillView: View {
     @Namespace private var space
     @State private var opening = false   // the press on the icon and title, which the travelling icon follows too
 
-    private var showsPlayer: Bool { state.expanded && state.track != nil }
+    private var open: Bool { state.expanded }
+    private var playing: Bool { state.track?.playing == true }
+    private var idle: Bool { mode == .media && !playing }
+    private var tint: Color { Color(nsColor: color) }
 
     var body: some View {
-        let h = layout.window.height
-        let width = !state.expanded ? layout.collapsed.width : showsPlayer ? Pill.openWidth(layout) : layout.expanded.width
-        let radius: CGFloat = showsPlayer ? 24 : min(13, h / 2 - 1)   // a 24pt menu bar can't take 13pt corners
+        let h = layout.bar.height
+        let card = Pill.card(state.track)
+        let width = open ? layout.open.width : Pill.barWidth(layout, mode, state.track)
+        let radius: CGFloat = open ? 24 : min(13, h / 2 - 1)   // a 24pt menu bar can't take 13pt corners
         let shape = UnevenRoundedRectangle(bottomLeadingRadius: radius, bottomTrailingRadius: radius)
         ZStack(alignment: .top) {
-            // The player keeps its final size and the growing pill uncovers it, so nothing reflows mid-motion.
+            // The card keeps its final size and the growing pill uncovers it, so nothing reflows mid-motion.
             shape.fill(.black)
-                .frame(width: width, height: h + (showsPlayer ? Pill.player : 0))
+                .frame(width: width, height: h + (open ? card : 0))
+                .overlay { LinearGradient(colors: [.clear, tint.opacity(idle ? 0.16 : 0.32)], startPoint: .top, endPoint: .bottom) }
                 .overlay(alignment: .top) {
-                    if let track = state.track {
-                        player(track)
-                            .frame(width: Pill.openWidth(layout), height: Pill.player)
-                            .padding(.top, h)
-                            .opacity(showsPlayer ? 1 : 0)
-                            .blur(radius: showsPlayer ? 0 : 2)
-                            .animation(reduceMotion ? nil : showsPlayer ? Self.reveal : Self.conceal, value: showsPlayer)
-                            .allowsHitTesting(showsPlayer)
-                    }
+                    self.card
+                        .frame(width: layout.open.width, height: card)
+                        .padding(.top, h)
+                        .opacity(open ? 1 : 0)
+                        .blur(radius: open ? 0 : 2)
+                        .animation(reduceMotion ? nil : open ? Self.reveal : Self.conceal, value: open)
+                        .allowsHitTesting(open)
                 }
-                .overlay { shape.stroke(.white.opacity(0.06), lineWidth: 1) }
+                .overlay { shape.stroke(tint.opacity(idle ? 0.3 : 0.55), lineWidth: 1) }
                 .clipShape(shape)
-                .shadow(color: .black.opacity(showsPlayer ? 0.3 : 0), radius: 14, y: 6)
+                .shadow(color: .black.opacity(open ? 0.3 : 0), radius: 14, y: 6)
             bar(width: width, height: h)
             icons
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
-    // Each icon follows the spot marked for it: in the bar, or in the player once it's open.
+    // Each icon follows the spot marked for it: in the bar, or in the card once it's open.
+    // Collapsed, the app's icon stands for a track and the state's icon shows only without one;
+    // open, the state's icon sits in its chip while Noise Cancellation is on.
     private var icons: some View {
-        ZStack {
+        let stateOpacity: Double = open ? (mode == .anc ? 1 : 0) : state.track != nil ? 0 : idle ? 0.45 : 1
+        return ZStack {
             if state.track != nil {
                 Image(nsImage: state.appIcon ?? NSImage(systemSymbolName: "music.note", accessibilityDescription: nil) ?? NSImage())
                     .resizable()
@@ -395,14 +425,13 @@ private struct PillView: View {
                     .matchedGeometryEffect(id: Spot.art, in: space, isSource: false)
                     .scaleEffect(opening ? 0.95 : 1)
                     .animation(reduceMotion ? nil : Self.press, value: opening)
-                    .animation(reduceMotion ? nil : showsPlayer ? Self.open : Self.conceal) { $0.opacity(showsPlayer ? 1 : 0) }
             }
             Image(systemName: mode.icon)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Color(nsColor: color))
-                .accessibilityLabel(mode.label.capitalized)
-                .frame(width: 20, height: 18)
-                .background { Circle().fill(.black).frame(width: 26, height: 26).opacity(showsPlayer ? 1 : 0) }
+                .foregroundStyle(tint)
+                .accessibilityLabel(mode.label)
+                .frame(width: PillLayout.icon, height: 18)
+                .opacity(stateOpacity)
                 .matchedGeometryEffect(id: Spot.state, in: space, isSource: false)
         }
         .allowsHitTesting(false)
@@ -410,76 +439,121 @@ private struct PillView: View {
 
     private enum Spot { case art, state }
 
-    private func spot(_ id: Spot, inPlayer: Bool) -> some View {
-        Color.clear.frame(width: 20, height: 18).matchedGeometryEffect(id: id, in: space, isSource: inPlayer == showsPlayer)
+    private func spot(_ id: Spot, inCard: Bool) -> some View {
+        Color.clear.frame(width: PillLayout.icon, height: 18).matchedGeometryEffect(id: id, in: space, isSource: inCard == open)
     }
 
-    // Beside a cutout the labels show only when the pill opens without a track; with one, the player takes over.
-    // Without a cutout the text sits between the icons until the player opens.
+    // The collapsed bar: the icon on the left, what's playing on the right. Without a cutout the text sits between.
     private func bar(width: CGFloat, height: CGFloat) -> some View {
-        let label = NSAttributedString(string: mode.label, attributes: [.font: Pill.font, .foregroundColor: color, .kern: 0.8])
-        let track = state.track.map { NSAttributedString(string: $0.text, attributes: [.font: Pill.font, .foregroundColor: color]) }
-            ?? NSAttributedString(string: "Not playing", attributes: [.font: Pill.font, .foregroundColor: color.withAlphaComponent(0.5)])
-        return Color.clear
+        Color.clear
             .frame(width: width, height: height)
             .overlay(alignment: .leading) {
-                HStack(spacing: 12) {
+                HStack(spacing: PillLayout.gap) {
                     ZStack {
-                        spot(.state, inPlayer: false)
-                        spot(.art, inPlayer: false)   // the app icon grows out of the state icon
+                        spot(.state, inCard: false)
+                        spot(.art, inCard: false)
                     }
-                    if layout.hasCutout {
-                        Marquee(text: label, color: color, reduceMotion: reduceMotion)
-                            .frame(width: layout.leftText.width, height: height)
-                            .opacity(state.expanded && state.track == nil ? 1 : 0)
-                    } else {
-                        Marquee(text: fixed ? track : label, color: color, always: !fixed, reduceMotion: reduceMotion)
-                            .frame(width: layout.leftText.width, height: height)
-                            .opacity(showsPlayer ? 0 : 1)
+                    if !layout.hasCutout, let text = Pill.barText(mode, state.track) {
+                        Marquee(text: NSAttributedString(string: text, attributes: [.font: Pill.font, .foregroundColor: color]),
+                                color: color, reduceMotion: reduceMotion)
+                            .frame(width: min(Pill.textWidth(text), PillLayout.maxText), height: height)
+                            .opacity(open ? 0 : 1)
                     }
                 }
-                .padding(.leading, 16)
+                .padding(.leading, PillLayout.edge)
                 .fixedSize()
             }
             .overlay(alignment: .trailing) {
-                HStack(spacing: 12) {
-                    if layout.hasCutout {
-                        Marquee(text: track, color: color, reduceMotion: reduceMotion)
-                            .frame(width: layout.rightText.width, height: height)
-                            .opacity(state.expanded && state.track == nil ? 1 : 0)
-                    }
-                    // The visualizer stays at the top-right corner and rides the edge out.
-                    Group {
-                        if reduceMotion {
-                            Image(systemName: "waveform").font(.system(size: 13, weight: .semibold))
-                        } else {
-                            Visualizer(tap: tap)
-                        }
-                    }
-                    .foregroundStyle(Color(nsColor: color))
-                    .accessibilityLabel("Media playing")
-                    .frame(width: 20, height: 18)
-                }
-                .padding(.trailing, 16)
-                .fixedSize()
+                // The mark stays at the top-right corner and rides the edge out.
+                trailing
+                    .frame(width: PillLayout.icon, height: 18)
+                    .padding(.trailing, PillLayout.edge)
             }
             .clipped()
             .allowsHitTesting(false)
     }
 
-    // One row, as wide as the opened pill: icon; title, artist and progress; previous, play/pause, next.
+    // Bars while something plays, a pause mark while it waits, nothing without a track.
+    @ViewBuilder private var trailing: some View {
+        if playing {
+            Group {
+                if reduceMotion {
+                    Image(systemName: "waveform").font(.system(size: 13, weight: .semibold))
+                } else {
+                    Visualizer(tap: tap)
+                }
+            }
+            .foregroundStyle(tint)
+            .accessibilityLabel("Media playing")
+        } else if state.track != nil {
+            Image(systemName: "pause.fill")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.45))
+                .accessibilityLabel("Paused")
+        }
+    }
+
+    // Status chips, a hairline, then the player or its stand-in.
+    private var card: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                chip(mode == .anc ? "\(PillMode.anc.label) on" : "\(PillMode.anc.label) off", on: mode == .anc) {
+                    ZStack {
+                        spot(.state, inCard: true)
+                        if mode != .anc { chipIcon(PillMode.anc.icon).opacity(0.55) }
+                    }
+                }
+                if !state.output.name.isEmpty {
+                    chip(state.output.name, on: false) {
+                        chipIcon(state.output.headphones ? "headphones" : "speaker.wave.2.fill")
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .frame(height: Pill.chips)
+            Rectangle().fill(.white.opacity(0.08)).frame(height: 1)
+            if let track = state.track {
+                player(track).frame(height: Pill.player)
+            } else {
+                Text("Nothing playing")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.5))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(height: Pill.empty)
+            }
+        }
+        .padding(.horizontal, 20)
+    }
+
+    private func chip(_ text: String, on: Bool, @ViewBuilder icon: () -> some View) -> some View {
+        HStack(spacing: 2) {
+            icon()
+            Text(text)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.white.opacity(on ? 0.95 : 0.6))
+                .lineLimit(1)
+        }
+        .padding(.leading, 4)
+        .padding(.trailing, 10)
+        .frame(height: 26)
+        .background(on ? tint.opacity(0.2) : Color.white.opacity(0.07), in: Capsule())
+    }
+
+    private func chipIcon(_ symbol: String) -> some View {
+        Image(systemName: symbol)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(.white.opacity(0.7))
+            .frame(width: PillLayout.icon, height: 18)
+    }
+
+    // One row: icon; title, artist and progress; previous, play/pause, next.
     private func player(_ track: Track) -> some View {
         HStack(spacing: 14) {
             Button(action: onOpen) {
                 HStack(spacing: 14) {
                     Color.clear
-                        .frame(width: 60, height: 60)
-                        .matchedGeometryEffect(id: Spot.art, in: space, isSource: showsPlayer)
-                        .overlay(alignment: .bottomTrailing) {   // the state icon as a badge on the corner
-                            spot(.state, inPlayer: true)
-                                .alignmentGuide(.trailing) { $0[.trailing] - 7 }
-                                .alignmentGuide(.bottom) { $0[.bottom] - 6 }
-                        }
+                        .frame(width: 52, height: 52)
+                        .matchedGeometryEffect(id: Spot.art, in: space, isSource: open)
                     VStack(alignment: .leading, spacing: 2) {
                         Title(text: track.title, reduceMotion: reduceMotion)
                         Text(track.artist)
@@ -510,8 +584,6 @@ private struct PillView: View {
                 control("Next", .nextTrack) { glyph("forward.fill", size: 14) }
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.bottom, 6)
     }
 
     @ViewBuilder private func progress(_ track: Track, at now: Date) -> some View {
@@ -630,24 +702,22 @@ private struct Title: View {
     }
 }
 
-// Static text when it fits, otherwise a marquee with faded edges; `always` scrolls even when it fits.
+// Static text when it fits, otherwise a marquee with faded edges.
 private struct Marquee: NSViewRepresentable {
     let text: NSAttributedString
     let color: NSColor
-    var always = false
     let reduceMotion: Bool
 
     func makeNSView(context: Context) -> MarqueeView { MarqueeView() }
 
     func updateNSView(_ view: MarqueeView, context: Context) {
-        view.update(text: text, color: color, always: always, reduceMotion: reduceMotion)
+        view.update(text: text, color: color, reduceMotion: reduceMotion)
     }
 }
 
 private final class MarqueeView: NSView {
     private var text = NSAttributedString()
     private var color = NSColor.white
-    private var always = false
     private var reduceMotion = false
     private var filled: (NSAttributedString, CGSize)?
 
@@ -659,10 +729,9 @@ private final class MarqueeView: NSView {
 
     required init?(coder: NSCoder) { fatalError("not used") }
 
-    func update(text: NSAttributedString, color: NSColor, always: Bool, reduceMotion: Bool) {
+    func update(text: NSAttributedString, color: NSColor, reduceMotion: Bool) {
         self.text = text
         self.color = color
-        self.always = always
         self.reduceMotion = reduceMotion
         needsLayout = true
     }
@@ -686,7 +755,7 @@ private final class MarqueeView: NSView {
         let h = bounds.height
         let baseline = (h - font.ascender + font.descender) / 2 - font.descender
         let overflows = tw > bounds.width
-        let scrolls = (overflows || always) && !reduceMotion
+        let scrolls = overflows && !reduceMotion
         let gap: CGFloat = 30
         let copies = scrolls ? Int(ceil(bounds.width / (tw + gap))) + 1 : 1
         let strip = CALayer()

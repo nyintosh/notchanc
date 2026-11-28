@@ -84,44 +84,49 @@ struct LayoutTests {
     let screen = NSRect(x: 0, y: 0, width: 2056, height: 1329)
 
     // 14" MacBook Pro, measured: 2056pt wide, 38pt inset, 918pt auxiliary areas, a 220pt notch.
-    // 100pt text areas: each side opens to 48 + 100 + 10 = 158pt.
     @Test func notch() {
         let l = PillLayout(screen: screen, topInset: 38,
                            leftAux: NSRect(x: 0, y: 1291, width: 918, height: 38),
-                           rightAux: NSRect(x: 1138, y: 1291, width: 918, height: 38), barHeight: 24, textWidth: 100)
+                           rightAux: NSRect(x: 1138, y: 1291, width: 918, height: 38), barHeight: 24)
         #expect(l.hasCutout && l.middle == 220 && l.cutoutName == "notch")
-        #expect(l.window == NSRect(x: 918 - 158, y: 1291, width: 158 + 220 + 158, height: 38))
-        #expect(l.collapsed == NSRect(x: 158 - 52, y: 0, width: 52 + 220 + 52, height: 38))
-        #expect(l.expanded == NSRect(x: 0, y: 0, width: 536, height: 38))
-        #expect(l.leftText == NSRect(x: 48, y: 0, width: 100, height: 38))
-        #expect(l.rightText == NSRect(x: 536 - 148, y: 0, width: 100, height: 38))
+        #expect(l.bar == NSRect(x: 918 - 52, y: 1291, width: 52 + 220 + 52, height: 38))
+        #expect(l.open == NSRect(x: 1028 - 300, y: 1291, width: 600, height: 38))
     }
 
     @Test func island() {
         let l = PillLayout(screen: screen, topInset: 38,
                            leftAux: NSRect(x: 0, y: 1291, width: 978, height: 38),
-                           rightAux: NSRect(x: 1078, y: 1291, width: 978, height: 38), barHeight: 24, textWidth: 100)
+                           rightAux: NSRect(x: 1078, y: 1291, width: 978, height: 38), barHeight: 24)
         #expect(l.middle == 100 && l.cutoutName == "Dynamic Island")
-        #expect(l.window.minX == CGFloat(978 - 158))
+        #expect(l.bar.minX == CGFloat(978 - 52) && l.bar.width == 204)
+        #expect(l.open.midX == 1028)
     }
 
     // Built-in display placed right of a primary external one, cutout off the screen's midpoint.
     @Test func offCentreOnSecondaryScreen() {
         let l = PillLayout(screen: NSRect(x: 3440, y: 0, width: 2000, height: 1300), topInset: 38,
                            leftAux: NSRect(x: 3440, y: 1262, width: 800, height: 38),
-                           rightAux: NSRect(x: 4440, y: 1262, width: 1000, height: 38), barHeight: 24, textWidth: 100)
+                           rightAux: NSRect(x: 4440, y: 1262, width: 1000, height: 38), barHeight: 24)
         #expect(l.middle == 200)
-        #expect(l.window.minX == CGFloat(3440 + 800 - 158))
-        #expect(l.window.maxX == CGFloat(4440 + 158))
+        #expect(l.bar.minX == CGFloat(3440 + 800 - 52))
+        #expect(l.bar.maxX == CGFloat(4440 + 52))
+        #expect(l.open.midX == 4340)
     }
 
-    // No cutout: the original full pill, the same size collapsed and hovered, text between the icons.
+    // No cutout: a bar centred in the menu bar, at most 386pt wide, opening to the card's width.
     @Test func noCutout() {
         let l = PillLayout(screen: NSRect(x: 0, y: 0, width: 3440, height: 1440), topInset: 0,
-                           leftAux: .zero, rightAux: .zero, barHeight: 24, textWidth: 100)
+                           leftAux: .zero, rightAux: .zero, barHeight: 24)
         #expect(!l.hasCutout && l.cutoutName == nil)
-        #expect(l.window == NSRect(x: 1720 - 193, y: 1416, width: 48 + 290 + 48, height: 24))
-        #expect(l.collapsed == l.expanded)
-        #expect(l.leftText == NSRect(x: 48, y: 0, width: 290, height: 24) && l.rightText == l.leftText)
+        #expect(l.bar == NSRect(x: 1720 - 193, y: 1416, width: 386, height: 24))
+        #expect(l.open == NSRect(x: 1720 - 300, y: 1416, width: 600, height: 24))
+    }
+
+    // Without a cutout the bar hugs its content (16 edge, 20 icon, 12 gap) and stops growing at the widest text.
+    @Test func barWidth() {
+        #expect(PillLayout.barWidth(text: nil, trailing: false) == 52)
+        #expect(PillLayout.barWidth(text: 100, trailing: false) == 164)
+        #expect(PillLayout.barWidth(text: 100, trailing: true) == 196)
+        #expect(PillLayout.barWidth(text: 1000, trailing: true) == PillLayout.maxBar)
     }
 }

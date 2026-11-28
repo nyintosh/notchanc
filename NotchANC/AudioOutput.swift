@@ -1,11 +1,18 @@
-// Whether sound is going to headphones: any Bluetooth output (AirPods, Beats, other headsets)
-// or the headphone jack. Watches the default output device and, for the jack, its data source.
+// Where sound is going: the output device's name, and whether it is headphones: any Bluetooth output
+// (AirPods, Beats, other headsets) or the headphone jack. Watches the default output device and, for the jack,
+// its data source.
 
 import CoreAudio
 
+struct Output: Equatable {
+    var name: String
+    var headphones: Bool
+}
+
 final class AudioOutput {
     var onChange: (() -> Void)?
-    private(set) var toHeadphones = false
+    private(set) var current = Output(name: "", headphones: false)
+    var toHeadphones: Bool { current.headphones }
     private var watched: Set<AudioObjectID> = []
 
     func start() {
@@ -22,16 +29,26 @@ final class AudioOutput {
         }
         let transport = Self.value(device, kAudioDevicePropertyTransportType, kAudioObjectPropertyScopeGlobal)
         let source = Self.value(device, kAudioDevicePropertyDataSource, kAudioDevicePropertyScopeOutput)
-        let now = transport == kAudioDeviceTransportTypeBluetooth || transport == kAudioDeviceTransportTypeBluetoothLE
+        let headphones = transport == kAudioDeviceTransportTypeBluetooth || transport == kAudioDeviceTransportTypeBluetoothLE
             || source == 0x6864_706E   // 'hdpn', the headphone jack
-        guard now != toHeadphones else { return }
-        toHeadphones = now
+        let now = Output(name: Self.name(device), headphones: headphones)
+        guard now != current else { return }
+        current = now
         onChange?()
     }
 
     private func watch(_ id: AudioObjectID, _ selector: AudioObjectPropertySelector, _ scope: AudioObjectPropertyScope) {
         var address = AudioObjectPropertyAddress(mSelector: selector, mScope: scope, mElement: kAudioObjectPropertyElementMain)
         AudioObjectAddPropertyListenerBlock(id, &address, .main) { [weak self] _, _ in self?.update() }
+    }
+
+    private static func name(_ id: AudioObjectID) -> String {
+        var address = AudioObjectPropertyAddress(mSelector: kAudioObjectPropertyName, mScope: kAudioObjectPropertyScopeGlobal,
+                                                 mElement: kAudioObjectPropertyElementMain)
+        var name: Unmanaged<CFString>?
+        var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+        guard AudioObjectGetPropertyData(id, &address, 0, nil, &size, &name) == noErr, let name else { return "" }
+        return name.takeRetainedValue() as String
     }
 
     private static func value(_ id: AudioObjectID, _ selector: AudioObjectPropertySelector, _ scope: AudioObjectPropertyScope) -> UInt32? {
