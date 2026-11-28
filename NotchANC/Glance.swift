@@ -1,5 +1,5 @@
-// What the card's tiles show: the headphones' battery, the next calendar event, and how busy the Mac is
-// (processor, graphics, memory, disk). Read only while a pill is open.
+// What the card reads from the system: the headphones' battery for the output chip, and for the tiles the next
+// calendar event and how busy the Mac is (processor, graphics, memory, disk). Read only while a pill is open.
 
 import EventKit
 import Foundation
