@@ -105,7 +105,8 @@ final class AirPodsMonitor: NSObject {
                 if let v = Self.parse(String(line)) { state = v }
             }
             if let state {
-                DispatchQueue.main.async { if self.running { self.onChange?(state) } }
+                // The log's last word may be from before the headphones left; it counts only while they're here.
+                DispatchQueue.main.async { if self.running, self.wasConnected != false { self.onChange?(state) } }
             }
         }
     }
