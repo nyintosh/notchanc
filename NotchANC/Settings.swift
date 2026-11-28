@@ -44,6 +44,10 @@ private struct GeneralTab: View {
     @AppStorage("automatic") private var automatic = true
     @AppStorage("hideMenuBarIcon") private var hideIcon = false
     @AppStorage("menuBarIcon") private var menuBarIcon = menuBarIcons[0]
+    @AppStorage(Countdown.focusMinutesKey) private var focusMinutes = Countdown.focusLengths[0]
+    @AppStorage(Countdown.startShortcutKey) private var startShortcut = ""
+    @AppStorage(Countdown.endShortcutKey) private var endShortcut = ""
+    @State private var shortcuts: [String] = []
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var autoUpdate: Bool
 
@@ -80,12 +84,38 @@ private struct GeneralTab: View {
                 }
             }
             Divider().padding(.vertical, 8)
+            LabeledContent("Focus session") {
+                VStack(alignment: .leading, spacing: 6) {
+                    Picker("Length", selection: $focusMinutes) {
+                        ForEach(Countdown.focusLengths, id: \.self) { Text("\($0) minutes") }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .fixedSize()
+                    shortcutPicker("When it starts, run", selection: $startShortcut)
+                    shortcutPicker("When it ends, run", selection: $endShortcut)
+                    Text("macOS lets no app switch Focus, so pick Shortcuts that turn yours on and off.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            Divider().padding(.vertical, 8)
             LabeledContent("Updates") {
                 Toggle("Check automatically", isOn: $autoUpdate)
                     .onChange(of: autoUpdate) { _, on in updater.automaticallyChecksForUpdates = on }
             }
         }
         .formStyle(.columns)
+        .task { shortcuts = await Task.detached { Countdown.shortcuts() }.value }
+    }
+
+    // A chosen Shortcut that was since deleted stays listed, so the menu still shows what is stored.
+    private func shortcutPicker(_ title: String, selection: Binding<String>) -> some View {
+        Picker(title, selection: selection) {
+            Text("Nothing").tag("")
+            ForEach(shortcuts.contains(selection.wrappedValue) || selection.wrappedValue.isEmpty
+                    ? shortcuts : shortcuts + [selection.wrappedValue], id: \.self) { Text($0).tag($0) }
+        }
+        .fixedSize()
     }
 }
 

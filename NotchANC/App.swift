@@ -54,7 +54,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ n: Notification) {
-        defaults.register(defaults: PillMode.allCases.reduce(["automatic": true, MediaVisibility.key: MediaVisibility.headphones.rawValue, "menuBarIcon": menuBarIcons[0]]) {
+        defaults.register(defaults: PillMode.allCases.reduce(["automatic": true, MediaVisibility.key: MediaVisibility.headphones.rawValue,
+                                                             Countdown.focusMinutesKey: Countdown.focusLengths[0], "menuBarIcon": menuBarIcons[0]]) {
             $0.merging($1.defaults) { a, _ in a }
         })
         // 1.0.0–1.0.3 kept one accent colour as an index into five swatches.
@@ -114,6 +115,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.overlay.track = track
             self?.updatePill()
         }
+        overlay.countdown.onChange = { [weak self] in self?.updatePill() }
         overlay.onCommand = { [weak self] in self?.nowPlaying.send($0) }
         overlay.onOpen = { [weak self] in if let track = self?.overlay.track { self?.nowPlaying.open(track) } }
         nowPlaying.start()   // also shows the pill for media while ANC is off
@@ -196,10 +198,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updatePill()
     }
 
-    // ANC wins; otherwise Settings decide when the Now Playing pill shows.
+    // ANC wins; otherwise Settings decide when the Now Playing pill shows, and a timer keeps it up.
     private func updatePill() {
         hideMedia?.cancel()
-        let mode: PillMode? = ancOn ? .anc : (visibility.shows(playing: track?.playing == true, toHeadphones: output.toHeadphones) ? .media : nil)
+        let mode: PillMode? = ancOn ? .anc
+            : (visibility.shows(playing: track?.playing == true, toHeadphones: output.toHeadphones) || overlay.countdown.isActive ? .media : nil)
         guard mode == nil, overlay.mode == .media else { overlay.mode = mode; return }
         // Players report "paused" for a moment between tracks; don't flash the pill.
         let work = DispatchWorkItem { [weak self] in self?.overlay.mode = nil }

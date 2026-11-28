@@ -3,7 +3,7 @@
 // Collapsed, the playing app's icon (or the state's, with no track) sits on the left and the visualizer on the right;
 // without a cutout the track's text sits between them and the bar hugs it.
 // Hovering opens one card: status chips (Noise Cancellation, where sound is going), the Now Playing player when
-// there is a track, and tiles of things worth a glance.
+// there is a track, and tiles of things worth a glance, the quick timer among them.
 // The collapsed pill's icons travel into the card, and the visualizer rides its edge.
 
 import Cocoa
@@ -87,8 +87,8 @@ struct PillLayout: Equatable {
     }
 
     // Without a cutout the bar hugs what it holds: the icon, the text if any, and the mark on the right if any.
-    static func barWidth(text: CGFloat?, trailing: Bool) -> CGFloat {
-        edge + icon + (text.map { gap + min($0, maxText) } ?? 0) + (trailing ? gap + icon : 0) + edge
+    static func barWidth(text: CGFloat?, trailing: CGFloat?) -> CGFloat {
+        edge + icon + (text.map { gap + min($0, maxText) } ?? 0) + (trailing.map { gap + $0 } ?? 0) + edge
     }
 
     // ponytail: guesses by width since no API names the cutout; Island Macs ship narrower than every notch (~180pt+).
@@ -116,6 +116,7 @@ final class NotchOverlay {
     private var shown: PillMode?   // what the pills show; outlives `mode` while the pointer holds the player open
     private let tap = AudioTap()
     private let glance = Glance()
+    let countdown = Countdown()
     var hiddenDisplays: Set<String> = []
     var menu: NSMenu?   // right-click menu, the same one the menu bar icon shows
     var onCommand: ((MediaCommand) -> Void)?
@@ -134,7 +135,10 @@ final class NotchOverlay {
     private func listen() { tap.isRunning = shown != nil && track?.playing == true }
 
     // The tiles' readings are taken only while a pill is open.
-    private func watch() { glance.isWatching = pills.contains(where: \.expanded) }
+    private func watch() {
+        glance.isWatching = pills.contains(where: \.expanded)
+        if glance.isWatching { countdown.seen() }
+    }
 
     // nil hides the pill. Switching between ANC and media rebuilds it in the new colour.
     var mode: PillMode? { didSet { update() } }
@@ -171,7 +175,7 @@ final class NotchOverlay {
         let open = Set(pills.filter(\.expanded).map(\.uuid))
         pills.forEach { $0.close() }
         pills = NSScreen.screens.filter { !hiddenDisplays.contains($0.uuid) }.map {
-            Pill(screen: $0, mode: mode, color: mode.color, track: track, output: output, expanded: open.contains($0.uuid), menu: menu, tap: tap, glance: glance,
+            Pill(screen: $0, mode: mode, color: mode.color, track: track, output: output, expanded: open.contains($0.uuid), menu: menu, tap: tap, glance: glance, countdown: countdown,
                  onCommand: { [weak self] in self?.onCommand?($0) }, onOpen: { [weak self] in self?.onOpen?() })
         }
         for p in pills {
@@ -243,6 +247,7 @@ private final class Pill {
     static let tiles = Tiles.height + 12   // the tiles and the room under them
     static let shadow: CGFloat = 40    // room around the open card for its shadow, so the window never cuts it
     static let font = NSFont.systemFont(ofSize: 11, weight: .semibold)
+    static let countdownWidth: CGFloat = 32   // "24:59" on the bar's right
     static let openDelay: TimeInterval = 0.12
     static let closeDelay: TimeInterval = 0.4
 
@@ -250,6 +255,7 @@ private final class Pill {
     let uuid: String
     private let layout: PillLayout
     private let mode: PillMode
+    private let countdown: Countdown
     private let state: PillState
     private let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
     private let onCommand: (MediaCommand) -> Void
@@ -270,15 +276,17 @@ private final class Pill {
         return ceil(CTLineGetTypographicBounds(line, nil, nil, nil)) + 2
     }
 
-    static func barWidth(_ layout: PillLayout, _ mode: PillMode, _ track: Track?) -> CGFloat {
+    // The countdown takes the right end while nothing plays; otherwise a track brings its bars or pause mark.
+    static func barWidth(_ layout: PillLayout, _ mode: PillMode, _ track: Track?, counting: Bool) -> CGFloat {
         guard !layout.hasCutout else { return layout.bar.width }
-        return PillLayout.barWidth(text: barText(mode, track).map(textWidth), trailing: track != nil)
+        let trailing: CGFloat? = counting && track?.playing != true ? countdownWidth : track != nil ? PillLayout.icon : nil
+        return PillLayout.barWidth(text: barText(mode, track).map(textWidth), trailing: trailing)
     }
 
     // The window reaches below the bar and beyond its sides for the card;
     // the pill is centred in it and fills only what's shown.
     var hitRect: NSRect {
-        let w = state.expanded ? layout.open.width : Self.barWidth(layout, mode, state.track)
+        let w = state.expanded ? layout.open.width : Self.barWidth(layout, mode, state.track, counting: countdown.session != nil)
         let h = layout.bar.height + (state.expanded ? Self.card(state.track) : 0)
         let f = window.frame
         return NSRect(x: f.midX - w / 2, y: f.maxY - h, width: w, height: h)
@@ -286,9 +294,10 @@ private final class Pill {
     }
 
     init(screen: NSScreen, mode: PillMode, color: NSColor, track: Track?, output: Output, expanded: Bool, menu: NSMenu?,
-         tap: AudioTap, glance: Glance, onCommand: @escaping (MediaCommand) -> Void, onOpen: @escaping () -> Void) {
+         tap: AudioTap, glance: Glance, countdown: Countdown, onCommand: @escaping (MediaCommand) -> Void, onOpen: @escaping () -> Void) {
         layout = screen.pillLayout()
         self.mode = mode
+        self.countdown = countdown
         uuid = screen.uuid
         state = PillState(output: output, expanded: expanded)
         self.onCommand = onCommand
@@ -315,7 +324,7 @@ private final class Pill {
         window.contentView = root
 
         let view = PillView(layout: layout, mode: mode, color: color,
-                            reduceMotion: reduceMotion, state: state, tap: tap, glance: glance, onCommand: { [weak self] in self?.send($0) },
+                            reduceMotion: reduceMotion, state: state, tap: tap, glance: glance, countdown: countdown, onCommand: { [weak self] in self?.send($0) },
                             onOpen: onOpen)
         let host = FirstClickHostingView(rootView: view)
         host.frame = root.bounds
@@ -384,6 +393,7 @@ private struct PillView: View {
     @ObservedObject var state: PillState
     let tap: AudioTap
     let glance: Glance
+    @ObservedObject var countdown: Countdown
     let onCommand: (MediaCommand) -> Void
     let onOpen: () -> Void
     @Namespace private var space
@@ -397,7 +407,7 @@ private struct PillView: View {
     var body: some View {
         let h = layout.bar.height
         let card = Pill.card(state.track)
-        let width = open ? layout.open.width : Pill.barWidth(layout, mode, state.track)
+        let width = open ? layout.open.width : Pill.barWidth(layout, mode, state.track, counting: countdown.session != nil)
         let radius: CGFloat = open ? 24 : min(13, h / 2 - 1)   // a 24pt menu bar can't take 13pt corners
         let shape = UnevenRoundedRectangle(bottomLeadingRadius: radius, bottomTrailingRadius: radius)
         ZStack(alignment: .top) {
@@ -481,14 +491,14 @@ private struct PillView: View {
             .overlay(alignment: .trailing) {
                 // The mark stays at the top-right corner and rides the edge out.
                 trailing
-                    .frame(width: PillLayout.icon, height: 18)
+                    .frame(minWidth: PillLayout.icon, minHeight: 18)
                     .padding(.trailing, PillLayout.edge)
             }
             .clipped()
             .allowsHitTesting(false)
     }
 
-    // Bars while something plays, a pause mark while it waits, nothing without a track.
+    // Bars while something plays; otherwise the countdown or its bell; a pause mark while a track waits; else nothing.
     @ViewBuilder private var trailing: some View {
         if playing {
             Group {
@@ -500,6 +510,19 @@ private struct PillView: View {
             }
             .foregroundStyle(tint)
             .accessibilityLabel("Media playing")
+        } else if let session = countdown.session {
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                Text(Countdown.text(remaining: session.end.timeIntervalSince(context.date)))
+                    .font(.system(size: 10, weight: .semibold).monospacedDigit())
+                    .foregroundStyle(tint)
+                    .frame(width: Pill.countdownWidth, alignment: .trailing)
+            }
+            .accessibilityLabel(session.focus ? "Focus session" : "Timer")
+        } else if countdown.rang {
+            Image(systemName: "bell.fill")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(tint)
+                .accessibilityLabel("Time's up")
         } else if state.track != nil {
             Image(systemName: "pause.fill")
                 .font(.system(size: 10, weight: .semibold))
@@ -532,7 +555,8 @@ private struct PillView: View {
             } else {
                 Color.clear.frame(height: Pill.tilesGap)
             }
-            Tiles(glance: glance, tint: tint).frame(height: Pill.tiles, alignment: .top)
+            Tiles(glance: glance, countdown: countdown, tint: tint, reduceMotion: reduceMotion)
+                .frame(height: Pill.tiles, alignment: .top)
         }
         .padding(.horizontal, Self.margin)
     }
@@ -648,7 +672,9 @@ private struct Tiles: View {
     static let width = (PillLayout.cardWidth - 2 * PillView.margin - 3 * spacing) / 4   // room for four in a row
 
     @ObservedObject var glance: Glance
+    @ObservedObject var countdown: Countdown
     let tint: Color
+    let reduceMotion: Bool
 
     var body: some View {
         HStack(spacing: Self.spacing) {
@@ -662,25 +688,80 @@ private struct Tiles: View {
             } else {
                 tile("cpu", "CPU", "\(glance.mac.processor)%", nil)
             }
+            timer
             Spacer(minLength: 0)
         }
     }
 
-    private func tile(_ symbol: String, _ name: String, _ value: String, _ detail: String?) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack(spacing: 4) {
-                Image(systemName: symbol).font(.system(size: 10, weight: .semibold)).foregroundStyle(tint)
-                Text(name).font(.system(size: 10, weight: .medium)).foregroundStyle(.white.opacity(0.55)).lineLimit(1)
+    // Minutes to start a timer and the moon to start a focus session; while one runs, its time and a way out.
+    @ViewBuilder private var timer: some View {
+        if let session = countdown.session {
+            box {
+                caption(session.focus ? "moon.stars.fill" : "timer", session.focus ? "Focus" : "Timer")
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    value(Countdown.text(remaining: session.end.timeIntervalSince(context.date)))
+                }
+                Button("Cancel") { countdown.cancel() }
+                    .buttonStyle(Press(reduceMotion: reduceMotion))
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(tint)
             }
-            Text(value).font(.system(size: 14, weight: .semibold).monospacedDigit()).foregroundStyle(.white).lineLimit(1)
+        } else {
+            box {
+                caption("timer", "Timer")
+                HStack(spacing: 3) {
+                    ForEach(Countdown.presets, id: \.self) { minutes in
+                        start("\(minutes) minute timer") { countdown.start(minutes: minutes, focus: false) } label: {
+                            Text("\(minutes)").font(.system(size: 11, weight: .semibold).monospacedDigit())
+                        }
+                    }
+                    start("Focus session") { countdown.startFocus() } label: {
+                        Image(systemName: "moon.stars.fill").font(.system(size: 10, weight: .semibold)).foregroundStyle(tint)
+                    }
+                }
+                .padding(.top, 5)
+            }
+        }
+    }
+
+    private func start(_ name: String, action: @escaping () -> Void, @ViewBuilder label: () -> some View) -> some View {
+        Button(action: action) {
+            label()
+                .foregroundStyle(.white.opacity(0.9))
+                .frame(width: 26, height: 22)
+                .background(.white.opacity(0.1), in: Capsule())
+        }
+        .buttonStyle(Press(reduceMotion: reduceMotion))
+        .accessibilityLabel(name)
+    }
+
+    private func tile(_ symbol: String, _ name: String, _ value: String, _ detail: String?) -> some View {
+        box {
+            caption(symbol, name)
+            self.value(value)
             if let detail {
                 Text(detail).font(.system(size: 10, weight: .medium).monospacedDigit()).foregroundStyle(.white.opacity(0.55)).lineLimit(1)
             }
         }
-        .padding(10)
-        .frame(width: Self.width, height: Self.height, alignment: .topLeading)
-        .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .accessibilityElement(children: .combine)
+    }
+
+    private func caption(_ symbol: String, _ name: String) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: symbol).font(.system(size: 10, weight: .semibold)).foregroundStyle(tint)
+            Text(name).font(.system(size: 10, weight: .medium)).foregroundStyle(.white.opacity(0.55)).lineLimit(1)
+        }
+    }
+
+    private func value(_ text: String) -> some View {
+        Text(text).font(.system(size: 14, weight: .semibold).monospacedDigit()).foregroundStyle(.white).lineLimit(1)
+    }
+
+    private func box(@ViewBuilder content: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: 3, content: content)
+            .padding(10)
+            .frame(width: Self.width, height: Self.height, alignment: .topLeading)
+            .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
 

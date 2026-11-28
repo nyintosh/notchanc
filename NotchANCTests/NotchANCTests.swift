@@ -89,6 +89,16 @@ struct GlanceTests {
     }
 }
 
+struct CountdownTests {
+    @Test func text() {
+        #expect(Countdown.text(remaining: 25 * 60) == "25:00")
+        #expect(Countdown.text(remaining: 59.2) == "1:00")
+        #expect(Countdown.text(remaining: 0.4) == "0:01")
+        #expect(Countdown.text(remaining: -3) == "0:00")
+        #expect(Countdown.text(remaining: 3899) == "1:04:59")
+    }
+}
+
 struct ColorTests {
     @Test func hexRoundTrip() {
         for hex in ["#FF9F0A", "#0A84FF", "#000000", "#FFFFFF"] { #expect(NSColor(hex: hex)?.hex == hex) }
@@ -140,9 +150,10 @@ struct LayoutTests {
 
     // Without a cutout the bar hugs its content (16 edge, 20 icon, 12 gap) and stops growing at the widest text.
     @Test func barWidth() {
-        #expect(PillLayout.barWidth(text: nil, trailing: false) == 52)
-        #expect(PillLayout.barWidth(text: 100, trailing: false) == 164)
-        #expect(PillLayout.barWidth(text: 100, trailing: true) == 196)
-        #expect(PillLayout.barWidth(text: 1000, trailing: true) == PillLayout.maxBar)
+        #expect(PillLayout.barWidth(text: nil, trailing: nil) == 52)
+        #expect(PillLayout.barWidth(text: 100, trailing: nil) == 164)
+        #expect(PillLayout.barWidth(text: 100, trailing: 20) == 196)
+        #expect(PillLayout.barWidth(text: nil, trailing: 32) == 96)
+        #expect(PillLayout.barWidth(text: 1000, trailing: 20) == PillLayout.maxBar)
     }
 }
