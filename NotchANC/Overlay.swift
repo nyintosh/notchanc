@@ -4,7 +4,7 @@
 // without a cutout the track's text sits between them and the bar hugs it.
 // Hovering opens one card: status chips (Noise Cancellation, where sound is going), the Now Playing player when
 // there is a track, and tiles of things worth a glance, the quick timer among them. Tabs in the status row turn
-// the card into the file shelf or the clipboard history.
+// the card into the file shelf or the clipboard history; a keyboard shortcut opens either from any app.
 // The collapsed pill's icons travel into the card, and the visualizer rides its edge.
 
 import Cocoa
@@ -141,6 +141,8 @@ final class NotchOverlay {
     var menu: NSMenu?   // right-click menu, the same one the menu bar icon shows
     var onCommand: ((MediaCommand) -> Void)?
     var onOpen: (() -> Void)?   // clicking the player's icon or title
+    var onSummon: (() -> Void)?   // a shortcut wants the pill up, or no longer does
+    private(set) var summoned = false
     var output = Output(name: "", headphones: false) {
         didSet { if output != oldValue { pills.forEach { $0.setOutput(output) } } }
     }
@@ -199,7 +201,8 @@ final class NotchOverlay {
         pills.forEach { $0.close() }
         pills = NSScreen.screens.filter { !hiddenDisplays.contains($0.uuid) }.map {
             Pill(screen: $0, mode: mode, color: mode.color, track: track, output: output, listening: listening, expanded: open.contains($0.uuid), menu: menu, tap: tap, glance: glance, countdown: countdown, shelf: shelf, clipboard: clipboard,
-                 onCommand: { [weak self] in self?.onCommand?($0) }, onOpen: { [weak self] in self?.onOpen?() })
+                 onCommand: { [weak self] in self?.onCommand?($0) }, onOpen: { [weak self] in self?.onOpen?() },
+                 onDismiss: { [weak self] in self?.dismiss() })
         }
         for p in pills {
             p.window.alphaValue = animated ? 0 : 1
@@ -216,9 +219,44 @@ final class NotchOverlay {
             // so a file carried to the pill opens it.
             let moves: NSEvent.EventTypeMask = [.mouseMoved, .leftMouseDragged]
             monitors = [NSEvent.addGlobalMonitorForEvents(matching: moves) { [weak self] _ in self?.hover() },
-                        NSEvent.addLocalMonitorForEvents(matching: moves) { [weak self] e in self?.hover(); return e }]
+                        NSEvent.addLocalMonitorForEvents(matching: moves) { [weak self] e in self?.hover(); return e },
+                        // A card opened by shortcut closes on Esc, or on a click anywhere else.
+                        NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown) { [weak self] _ in
+                            if self?.pills.contains(where: \.held) == true { self?.dismiss() }
+                        },
+                        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] e in
+                            guard e.keyCode == 53, self?.pills.contains(where: \.held) == true else { return e }
+                            self?.dismiss()
+                            return nil
+                        }]
                 .compactMap { $0 }
         }
+    }
+
+    // A keyboard shortcut: open the card on that tab, on the screen the pointer is on, and keep it open with the
+    // search field ready. The same shortcut again closes it; the other one switches tabs.
+    func summon(_ part: CardPart) {
+        guard UserDefaults.standard.bool(forKey: part.rawValue) else { return }   // that tab is turned off
+        let tab: CardTab = part == .shelf ? .shelf : .clipboard
+        if let held = pills.first(where: \.held) {
+            if held.tab == tab { dismiss() } else { held.hold(tab) }
+            return
+        }
+        summoned = true
+        onSummon?()   // shows the pill if nothing else had it up
+        let mouse = NSEvent.mouseLocation
+        guard let pill = pills.first(where: { $0.screenFrame.contains(mouse) }) ?? pills.first else { return dismiss() }
+        pill.hold(tab)
+        watch()
+    }
+
+    // Ends what a shortcut opened: Esc, the shortcut again, Return on a result, or a click elsewhere.
+    func dismiss() {
+        pills.filter(\.held).forEach { $0.release() }
+        summoned = false
+        watch()
+        onSummon?()
+        update()
     }
 
     // A short wait before opening, so a pointer passing over the menu bar doesn't open it; a longer one before closing.
@@ -227,7 +265,7 @@ final class NotchOverlay {
         // A drag in progress whose pasteboard holds files: the pill opens on the shelf, ready for the drop.
         let carryingFiles = NSEvent.pressedMouseButtons & 1 != 0 && UserDefaults.standard.bool(forKey: CardPart.shelf.rawValue)
             && NSPasteboard(name: .drag).canReadObject(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true])
-        for p in pills {
+        for p in pills where !p.held {   // a card opened by shortcut stays until dismissed
             let inside = p.hitRect.contains(mouse)
             // Clicks pass through to the menu bar, except while the pointer is on the pill (buttons, right-click menu).
             if p.window.ignoresMouseEvents == inside { p.window.ignoresMouseEvents = !inside }
@@ -291,6 +329,9 @@ private final class PillState: ObservableObject {
     @Published var expanded: Bool
     @Published var tab = CardTab.now
     @Published var query = ""   // what the shelf or the clipboard is searched for
+    @Published var held = false   // opened by a shortcut: stays open, and the keyboard chooses among the results
+    @Published var selection = 0  // the result the keyboard is on
+    @Published var focus = 0      // bumped to put the cursor in the search field
 
     init(output: Output, listening: ListeningMode?, expanded: Bool) {
         self.output = output
@@ -321,6 +362,9 @@ private final class Pill {
     private let onCommand: (MediaCommand) -> Void
     private var reported: Track?   // the player's own word, which an optimistic play/pause gives way to
     var expanded: Bool { state.expanded }
+    var held: Bool { state.held }
+    var tab: CardTab { state.tab }
+    let screenFrame: NSRect
     var openTimer: Timer?
     var collapseTimer: Timer?
 
@@ -371,7 +415,9 @@ private final class Pill {
 
     init(screen: NSScreen, mode: PillMode, color: NSColor, track: Track?, output: Output, listening: ListeningMode?, expanded: Bool,
          menu: NSMenu?,
-         tap: AudioTap, glance: Glance, countdown: Countdown, shelf: Shelf, clipboard: Clipboard, onCommand: @escaping (MediaCommand) -> Void, onOpen: @escaping () -> Void) {
+         tap: AudioTap, glance: Glance, countdown: Countdown, shelf: Shelf, clipboard: Clipboard, onCommand: @escaping (MediaCommand) -> Void, onOpen: @escaping () -> Void,
+         onDismiss: @escaping () -> Void) {
+        screenFrame = screen.frame
         layout = screen.pillLayout()
         self.mode = mode
         self.countdown = countdown
@@ -405,7 +451,7 @@ private final class Pill {
         let view = PillView(layout: layout, mode: mode, color: color,
                             reduceMotion: reduceMotion, state: state, tap: tap, glance: glance, countdown: countdown, shelf: shelf, clipboard: clipboard,
                             onCommand: { [weak self] in self?.send($0) },
-                            onOpen: onOpen)
+                            onOpen: onOpen, onDismiss: onDismiss)
         let host = FirstClickHostingView(rootView: view)
         host.frame = root.bounds
         root.addSubview(host)
@@ -424,6 +470,31 @@ private final class Pill {
     func setOutput(_ output: Output) { state.output = output }
 
     func setListening(_ mode: ListeningMode?) { state.listening = mode }
+
+    // Opened by a shortcut: on that tab, taking the keyboard, with the cursor in the search field.
+    func hold(_ tab: CardTab) {
+        openTimer?.invalidate(); openTimer = nil
+        collapseTimer?.invalidate(); collapseTimer = nil
+        state.held = true
+        state.selection = 0
+        if state.expanded {
+            state.query = ""
+            withAnimation(reduceMotion ? nil : PillView.open) { state.tab = tab }
+        } else {
+            setExpanded(true, tab: tab)
+        }
+        window.ignoresMouseEvents = false
+        window.makeKey()
+        // After the window has settled as key, or it hands the cursor to its first control instead.
+        DispatchQueue.main.async { [state] in if state.held { state.focus += 1 } }
+    }
+
+    func release() {
+        state.held = false
+        state.focus = 0
+        window.ignoresMouseEvents = true
+        setExpanded(false)
+    }
 
     // Every opening starts on the tab asked for; closing keeps the tab, so the card doesn't change as it leaves.
     func setExpanded(_ on: Bool, tab: CardTab = .now) {
@@ -495,6 +566,7 @@ private struct PillView: View {
     @ObservedObject var clipboard: Clipboard   // its count sets the clipboard tab's height
     let onCommand: (MediaCommand) -> Void
     let onOpen: () -> Void
+    let onDismiss: () -> Void
     @State private var dropping = false   // files are being held over the pill
     @AppStorage(CardPart.headphones.rawValue) private var showsBattery = true
     @AppStorage(CardPart.shelf.rawValue) private var showsShelf = true
@@ -698,10 +770,12 @@ private struct PillView: View {
                 Tiles(glance: glance, countdown: countdown, tint: tint, reduceMotion: reduceMotion)
                     .frame(height: Pill.tiles, alignment: .top)
             case .shelf:
-                ShelfView(shelf: shelf, query: $state.query, dropping: dropping, tint: tint, reduceMotion: reduceMotion)
+                ShelfView(shelf: shelf, query: $state.query, selection: $state.selection, held: state.held, focus: state.focus,
+                          dropping: dropping, tint: tint, reduceMotion: reduceMotion, onDismiss: onDismiss)
                     .frame(height: Pill.shelf)
             case .clipboard:
-                ClipboardView(clipboard: clipboard, query: $state.query, tint: tint, reduceMotion: reduceMotion)
+                ClipboardView(clipboard: clipboard, query: $state.query, selection: $state.selection, held: state.held,
+                              focus: state.focus, tint: tint, reduceMotion: reduceMotion, onDismiss: onDismiss)
                     .frame(height: Pill.clipboard(pinned: clipboard.pinned.count, recent: clipboard.items.count))
             }
         }
@@ -731,6 +805,7 @@ private struct PillView: View {
                         .contentShape(Capsule())
                 }
                 .buttonStyle(Press(reduceMotion: reduceMotion))
+                .focusable(false)   // the keyboard belongs to the search field, not to a tab
                 .accessibilityLabel(tab.label)
             }
         }
@@ -911,11 +986,16 @@ private struct EmptySlot: View {
 private struct TabTools: View {
     let prompt: String
     @Binding var query: String
+    @Binding var selection: Int   // which result the arrow keys are on
+    let results: Int
+    let focus: Int                // above zero, the field takes the cursor
     let remove: String
     let nothingToSearch: Bool
     let nothingToRemove: Bool
     let reduceMotion: Bool
+    let submit: () -> Void        // Return on the chosen result
     let action: () -> Void
+    @FocusState private var focused: Bool
 
     var body: some View {
         HStack(spacing: 8) {
@@ -925,6 +1005,12 @@ private struct TabTools: View {
                     .textFieldStyle(.plain)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(.white)
+                    .focused($focused)
+                    .onSubmit(submit)
+                    .onKeyPress(.downArrow) { move(1) }
+                    .onKeyPress(.upArrow) { move(-1) }
+                    .onChange(of: query) { selection = 0 }
+                    .onChange(of: focus, initial: true) { if focus > 0 { DispatchQueue.main.async { focused = true } } }
                 if !query.isEmpty {
                     Button { query = "" } label: {
                         Image(systemName: "xmark.circle.fill").font(.system(size: 11)).foregroundStyle(.white.opacity(0.5))
@@ -954,6 +1040,11 @@ private struct TabTools: View {
         }
         .environment(\.colorScheme, .dark)   // the pill is always dark, whatever the system wears
     }
+
+    private func move(_ step: Int) -> KeyPress.Result {
+        selection = min(max(selection + step, 0), max(results - 1, 0))
+        return .handled
+    }
 }
 
 // What a tab says when a search finds nothing in it.
@@ -970,9 +1061,16 @@ private func noMatches(_ query: String) -> some View {
 private struct ShelfView: View {
     @ObservedObject var shelf: Shelf
     @Binding var query: String
+    @Binding var selection: Int
+    let held: Bool
+    let focus: Int
     let dropping: Bool
     let tint: Color
     let reduceMotion: Bool
+    let onDismiss: () -> Void
+
+    // The file the keyboard is on, while a shortcut holds the card open.
+    private var chosen: URL? { held && !found.isEmpty ? found[min(selection, found.count - 1)] : nil }
 
     private var found: [URL] {
         query.isEmpty ? shelf.files : shelf.files.filter { $0.lastPathComponent.localizedCaseInsensitiveContains(query) }
@@ -980,8 +1078,13 @@ private struct ShelfView: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            TabTools(prompt: "Search files", query: $query, remove: "Remove all", nothingToSearch: shelf.files.isEmpty,
-                     nothingToRemove: shelf.files.isEmpty, reduceMotion: reduceMotion) { shelf.removeAll() }
+            TabTools(prompt: "Search files", query: $query, selection: $selection, results: found.count, focus: focus,
+                     remove: "Remove all", nothingToSearch: shelf.files.isEmpty, nothingToRemove: shelf.files.isEmpty,
+                     reduceMotion: reduceMotion) {
+                guard let file = chosen ?? found.first else { return }
+                NSWorkspace.shared.open(file)
+                onDismiss()
+            } action: { shelf.removeAll() }
             if shelf.files.isEmpty {
                 EmptySlot(symbol: "tray.and.arrow.down", title: "Drop files here",
                           detail: "They stay where they are. Drag one out to use it.", lit: dropping, tint: tint)
@@ -1002,7 +1105,8 @@ private struct ShelfView: View {
                                 }
                                 .padding(.horizontal, 6)
                                 .frame(width: 92, height: 84)
-                                .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                .background(file == chosen ? tint.opacity(0.22) : .white.opacity(0.06),
+                                            in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                             }
                             .buttonStyle(Press(reduceMotion: reduceMotion))
                             .accessibilityLabel("Open \(file.lastPathComponent)")
@@ -1033,9 +1137,17 @@ private struct ShelfView: View {
 private struct ClipboardView: View {
     @ObservedObject var clipboard: Clipboard
     @Binding var query: String
+    @Binding var selection: Int
+    let held: Bool
+    let focus: Int
     let tint: Color
     let reduceMotion: Bool
+    let onDismiss: () -> Void
     @State private var copied: String?   // the row just clicked, ticked for a moment
+
+    // Everything listed, in the order shown; and the copy the keyboard is on, while a shortcut holds the card open.
+    private var listed: [String] { found(in: clipboard.pinned) + found(in: clipboard.items) }
+    private var chosen: String? { held && !listed.isEmpty ? listed[min(selection, listed.count - 1)] : nil }
 
     private func found(in copies: [String]) -> [String] {
         query.isEmpty ? copies : copies.filter { $0.localizedCaseInsensitiveContains(query) }
@@ -1043,8 +1155,13 @@ private struct ClipboardView: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            TabTools(prompt: "Search copies", query: $query, remove: "Clear all", nothingToSearch: clipboard.all.isEmpty,
-                     nothingToRemove: clipboard.items.isEmpty, reduceMotion: reduceMotion) { clipboard.clear() }
+            TabTools(prompt: "Search copies", query: $query, selection: $selection, results: listed.count, focus: focus,
+                     remove: "Clear all", nothingToSearch: clipboard.all.isEmpty, nothingToRemove: clipboard.items.isEmpty,
+                     reduceMotion: reduceMotion) {
+                guard let text = chosen ?? listed.first else { return }
+                clipboard.copy(text)
+                onDismiss()
+            } action: { clipboard.clear() }
             if clipboard.all.isEmpty {
                 EmptySlot(symbol: "doc.on.clipboard", title: "Nothing copied yet",
                           detail: "What you copy shows up here. Click one to copy it again.", tint: tint)
@@ -1053,17 +1170,20 @@ private struct ClipboardView: View {
             } else {
                 // Pinned copies in a section of their own, on top; the recent ones are named only when both show.
                 let pinned = found(in: clipboard.pinned), recent = found(in: clipboard.items)
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: PillLayout.clipGap) {
-                        if !pinned.isEmpty {
-                            header("pin.fill", "Pinned")
-                            ForEach(pinned, id: \.self) { text in row(text) }
-                        }
-                        if !recent.isEmpty {
-                            if !clipboard.pinned.isEmpty { header("clock", "Recent") }
-                            ForEach(recent, id: \.self) { text in row(text) }
+                ScrollViewReader { list in
+                    ScrollView(showsIndicators: false) {
+                        VStack(spacing: PillLayout.clipGap) {
+                            if !pinned.isEmpty {
+                                header("pin.fill", "Pinned")
+                                ForEach(pinned, id: \.self) { text in row(text).id(text) }
+                            }
+                            if !recent.isEmpty {
+                                if !clipboard.pinned.isEmpty { header("clock", "Recent") }
+                                ForEach(recent, id: \.self) { text in row(text).id(text) }
+                            }
                         }
                     }
+                    .onChange(of: chosen) { if let chosen { list.scrollTo(chosen) } }   // keep the keyboard's row in view
                 }
             }
         }
@@ -1129,7 +1249,7 @@ private struct ClipboardView: View {
             .buttonStyle(Press(reduceMotion: reduceMotion))
             .accessibilityLabel("Delete")
         }
-        .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+        .background(text == chosen ? tint.opacity(0.22) : .white.opacity(0.06), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
     }
 
     private func copy(_ text: String) {

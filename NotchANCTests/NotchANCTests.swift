@@ -131,6 +131,16 @@ struct ClipboardTests {
     }
 }
 
+struct ShortcutTests {
+    @Test func stored() {
+        let shortcut = Shortcut(keyCode: 9, modifiers: 6144, label: "⌃⌥V")
+        #expect(shortcut.stored == "9,6144,⌃⌥V")
+        #expect(Shortcut(stored: shortcut.stored) == shortcut)
+        #expect(Shortcut(stored: "43,256,⌘,") == Shortcut(keyCode: 43, modifiers: 256, label: "⌘,"))
+        #expect(Shortcut(stored: "") == nil && Shortcut(stored: "9,6144") == nil && Shortcut(stored: "x,1,A") == nil)
+    }
+}
+
 struct ClipboardPinTests {
     @Test func togglingPin() {
         let pinned = Clipboard.togglingPin("b", pinned: ["x"], items: ["a", "b", "c"])

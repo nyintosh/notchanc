@@ -32,6 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let monitor = AirPodsMonitor()
     private let nowPlaying = NowPlaying()
     private let output = AudioOutput()
+    private let hotkeys = Hotkeys()
     private let updater = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
     private lazy var settings = SettingsWindow(updater: updater.updater)
     private let defaults = UserDefaults.standard
@@ -59,7 +60,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             $0.merging($1.defaults) { a, _ in a }
         }
         .merging(Dictionary(uniqueKeysWithValues: zip(Countdown.presetKeys, Countdown.presetDefaults))) { a, _ in a }
-        .merging(Dictionary(uniqueKeysWithValues: CardPart.allCases.map { ($0.rawValue, true) })) { a, _ in a })
+        .merging(Dictionary(uniqueKeysWithValues: CardPart.allCases.map { ($0.rawValue, true) })) { a, _ in a }
+        .merging(Dictionary(uniqueKeysWithValues: Shortcut.defaults.map { (Shortcut.key(for: $0.key), $0.value.stored) })) { a, _ in a })
         // 1.0.0–1.0.3 kept one accent colour as an index into five swatches.
         if let i = defaults.object(forKey: "accentColor") as? Int {
             defaults.set(["#FF9F0A", "#30D158", "#0A84FF", "#BF5AF2", "#FF375F"][min(max(i, 0), 4)], forKey: PillMode.anc.colorKey)
@@ -121,6 +123,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         overlay.countdown.onChange = { [weak self] in self?.updatePill() }
         overlay.onCommand = { [weak self] in self?.nowPlaying.send($0) }
+        overlay.onSummon = { [weak self] in self?.updatePill() }
+        hotkeys.onPress = { [weak self] in self?.overlay.summon($0) }
         overlay.onOpen = { [weak self] in if let track = self?.overlay.track { self?.nowPlaying.open(track) } }
         nowPlaying.start()   // also shows the pill for media while ANC is off
         output.onChange = { [weak self] in
@@ -176,6 +180,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             setStatusIcon(on: ancOn)
         }
 
+        for part in Shortcut.parts {
+            hotkeys.set(Shortcut(stored: defaults.string(forKey: Shortcut.key(for: part)) ?? ""), for: part)
+        }
+
         let visibility = defaults.string(forKey: MediaVisibility.key).flatMap(MediaVisibility.init) ?? .headphones
         if visibility != self.visibility {
             self.visibility = visibility
@@ -203,11 +211,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updatePill()
     }
 
-    // ANC wins; otherwise Settings decide when the Now Playing pill shows, and a timer keeps it up.
+    // ANC wins; otherwise Settings decide when the Now Playing pill shows; a timer or a shortcut's card keeps it up.
     private func updatePill() {
         hideMedia?.cancel()
         let mode: PillMode? = ancOn ? .anc
-            : (visibility.shows(playing: track?.playing == true, toHeadphones: output.toHeadphones) || overlay.countdown.isActive ? .media : nil)
+            : (visibility.shows(playing: track?.playing == true, toHeadphones: output.toHeadphones) || overlay.countdown.isActive || overlay.summoned ? .media : nil)
         guard mode == nil, overlay.mode == .media else { overlay.mode = mode; return }
         // Players report "paused" for a moment between tracks; don't flash the pill.
         let work = DispatchWorkItem { [weak self] in self?.overlay.mode = nil }

@@ -173,7 +173,62 @@ private struct CardPane: View {
                     Text("Kept in memory only, except what you pin. Never anything a password manager marks as secret.")
                 }
             }
+            Section {
+                ShortcutRecorder(title: "Open the clipboard", part: .clipboard)
+                ShortcutRecorder(title: "Open the shelf", part: .shelf)
+            } header: {
+                Text("Keyboard shortcuts")
+            } footer: {
+                Text("They work in any app. Type to search, ↑ and ↓ to choose, Return to copy or open, Esc to close.")
+            }
         }
+    }
+}
+
+// One shortcut: a button that shows it and, pressed, takes the next key combination as the new one.
+private struct ShortcutRecorder: View {
+    let title: String
+    @AppStorage private var stored: String
+    @State private var monitor: Any?
+
+    init(title: String, part: CardPart) {
+        self.title = title
+        _stored = AppStorage(wrappedValue: Shortcut.defaults[part]?.stored ?? "", Shortcut.key(for: part))
+    }
+
+    var body: some View {
+        LabeledContent(title) {
+            HStack(spacing: 6) {
+                Button(monitor != nil ? "Press a shortcut…" : Shortcut(stored: stored)?.label ?? "None") {
+                    monitor == nil ? record() : stop()
+                }
+                if !stored.isEmpty, monitor == nil {
+                    Button { stored = "" } label: { Image(systemName: "xmark.circle.fill") }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.secondary)
+                        .accessibilityLabel("Remove the shortcut")
+                }
+            }
+        }
+        .onDisappear(perform: stop)
+    }
+
+    // Esc leaves it as it was; anything without ⌃, ⌥ or ⌘ is ignored and recording goes on.
+    private func record() {
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            if event.keyCode == 53 {
+                stop()
+            } else if let shortcut = Shortcut(event: event) {
+                stored = shortcut.stored
+                stop()
+            }
+            return nil
+        }
+    }
+
+    private func stop() {
+        if let monitor { NSEvent.removeMonitor(monitor) }
+        monitor = nil
     }
 }
 

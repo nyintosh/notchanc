@@ -5,8 +5,9 @@
 - **Tiles in the card.** Under the player: the next calendar event with how soon it starts, and four rings for how busy the Mac is: processor, graphics, memory and disk. The calendar is read only after you press Show events.
 - **File shelf.** Drag files onto the pill to park them; open one with a click, drag it back out to use it, search them by name, or Remove all. The files stay where they are.
 - **Clipboard history.** The last ten texts you copied, in a tab of the card; click one to copy it again, search them, pin the ones to keep (they get a section of their own), delete one, or Clear all the rest. Kept in memory only except for pins, and anything a password manager marks as secret is skipped.
+- **Keyboard shortcuts.** ⌃⌥V opens the clipboard and ⌃⌥F the shelf from any app, even while the pill is hidden. Type to search, ↑ and ↓ to choose, Return to copy or open, Esc to close. Change or remove them in Settings › Card.
 - **Quick timer and focus session.** Start a timer from the card (5, 15 or 25 minutes, or your own three lengths), or a focus session (25 or 50 minutes, set in Settings › Focus). The pill shows the time left and rings at the end. A focus session can run one of your Shortcuts when it starts and another when it ends, to turn a macOS Focus on and off.
-- **A new Settings window.** A sidebar with General, Pill, Card, Focus and About. Card turns each tile and the shelf and clipboard tabs on or off; Focus sets the timer's three lengths and the focus session.
+- **A new Settings window.** A sidebar with General, Pill, Card, Focus and About. Card turns each tile and the shelf and clipboard tabs on or off and sets their shortcuts; Focus sets the timer's three lengths and the focus session.
 - **Choose when the Now Playing pill shows.** Settings › Pill now offers Never, With headphones, With any output and Always. With any output also shows it for the Mac's speakers; Always keeps the pill in place even when nothing plays.
 
 ## [1.0.6]
