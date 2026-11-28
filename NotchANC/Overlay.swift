@@ -3,11 +3,13 @@
 // Collapsed, the playing app's icon (or the state's, with no track) sits on the left and the visualizer on the right;
 // without a cutout the track's text sits between them and the bar hugs it.
 // Hovering opens one card: status chips (Noise Cancellation, where sound is going), the Now Playing player when
-// there is a track, and tiles of things worth a glance, the quick timer among them.
+// there is a track, and tiles of things worth a glance, the quick timer among them. Tabs in the status row turn
+// the card into the file shelf or the clipboard history.
 // The collapsed pill's icons travel into the card, and the visualizer rides its edge.
 
 import Cocoa
 import SwiftUI
+import UniformTypeIdentifiers
 
 // Swatches offered in Settings; any other colour comes from the colour picker.
 let presets: [(name: String, hex: String)] = [
@@ -117,6 +119,10 @@ final class NotchOverlay {
     private let tap = AudioTap()
     private let glance = Glance()
     let countdown = Countdown()
+    private let shelf = Shelf()
+    private let clipboard = Clipboard()
+
+    init() { clipboard.start() }   // copies are gathered whether or not a pill is showing
     var hiddenDisplays: Set<String> = []
     var menu: NSMenu?   // right-click menu, the same one the menu bar icon shows
     var onCommand: ((MediaCommand) -> Void)?
@@ -178,7 +184,7 @@ final class NotchOverlay {
         let open = Set(pills.filter(\.expanded).map(\.uuid))
         pills.forEach { $0.close() }
         pills = NSScreen.screens.filter { !hiddenDisplays.contains($0.uuid) }.map {
-            Pill(screen: $0, mode: mode, color: mode.color, track: track, output: output, listening: listening, expanded: open.contains($0.uuid), menu: menu, tap: tap, glance: glance, countdown: countdown,
+            Pill(screen: $0, mode: mode, color: mode.color, track: track, output: output, listening: listening, expanded: open.contains($0.uuid), menu: menu, tap: tap, glance: glance, countdown: countdown, shelf: shelf, clipboard: clipboard,
                  onCommand: { [weak self] in self?.onCommand?($0) }, onOpen: { [weak self] in self?.onOpen?() })
         }
         for p in pills {
@@ -192,9 +198,11 @@ final class NotchOverlay {
             }
         }
         if monitors.isEmpty {
-            // Mouse-moved monitors need no permission, and the pill keeps ignoring clicks.
-            monitors = [NSEvent.addGlobalMonitorForEvents(matching: .mouseMoved) { [weak self] _ in self?.hover() },
-                        NSEvent.addLocalMonitorForEvents(matching: .mouseMoved) { [weak self] e in self?.hover(); return e }]
+            // Mouse monitors need no permission, and the pill keeps ignoring clicks. Drags count too,
+            // so a file carried to the pill opens it.
+            let moves: NSEvent.EventTypeMask = [.mouseMoved, .leftMouseDragged]
+            monitors = [NSEvent.addGlobalMonitorForEvents(matching: moves) { [weak self] _ in self?.hover() },
+                        NSEvent.addLocalMonitorForEvents(matching: moves) { [weak self] e in self?.hover(); return e }]
                 .compactMap { $0 }
         }
     }
@@ -202,6 +210,9 @@ final class NotchOverlay {
     // A short wait before opening, so a pointer passing over the menu bar doesn't open it; a longer one before closing.
     private func hover() {
         let mouse = NSEvent.mouseLocation
+        // A drag in progress whose pasteboard holds files: the pill opens on the shelf, ready for the drop.
+        let carryingFiles = NSEvent.pressedMouseButtons & 1 != 0
+            && NSPasteboard(name: .drag).canReadObject(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true])
         for p in pills {
             let inside = p.hitRect.contains(mouse)
             // Clicks pass through to the menu bar, except while the pointer is on the pill (buttons, right-click menu).
@@ -211,7 +222,7 @@ final class NotchOverlay {
                 if !p.expanded, p.openTimer == nil {
                     p.openTimer = .scheduledTimer(withTimeInterval: Pill.openDelay, repeats: false) { [weak self, weak p] _ in
                         p?.openTimer = nil
-                        p?.setExpanded(true)
+                        p?.setExpanded(true, tab: carryingFiles ? .shelf : .now)
                         self?.watch()
                     }
                 }
@@ -231,12 +242,34 @@ final class NotchOverlay {
 }
 
 // What the SwiftUI drawing follows; the AppKit side changes it inside the pill's animations.
+// What the open card shows.
+private enum CardTab: CaseIterable {
+    case now, shelf, clipboard
+
+    var symbol: String {
+        switch self {
+        case .now: "square.grid.2x2.fill"
+        case .shelf: "tray.full.fill"
+        case .clipboard: "doc.on.clipboard.fill"
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .now: "Now"
+        case .shelf: "Shelf"
+        case .clipboard: "Clipboard"
+        }
+    }
+}
+
 private final class PillState: ObservableObject {
     @Published var track: Track?
     @Published var appIcon: NSImage?   // the player app's icon, shown in place of album art
     @Published var output: Output
     @Published var listening: ListeningMode?
     @Published var expanded: Bool
+    @Published var tab = CardTab.now
 
     init(output: Output, listening: ListeningMode?, expanded: Bool) {
         self.output = output
@@ -270,7 +303,10 @@ private final class Pill {
     var collapseTimer: Timer?
 
     // The card under the bar: the chips, a hairline, the player if there is a track, then the tiles.
-    static func card(_ track: Track?) -> CGFloat { chips + 1 + (track == nil ? tilesGap : player) + tiles }
+    // The shelf and the clipboard take the room of the player and the tiles, track or not.
+    static func card(_ track: Track?, _ tab: CardTab) -> CGFloat {
+        chips + 1 + (track == nil && tab == .now ? tilesGap : player) + tiles
+    }
 
     // What the bar says on a display without a cutout.
     static func barText(_ mode: PillMode, _ track: Track?) -> String? { track?.text ?? (mode == .anc ? mode.label : nil) }
@@ -292,7 +328,7 @@ private final class Pill {
     // the pill is centred in it and fills only what's shown.
     var hitRect: NSRect {
         let w = state.expanded ? layout.open.width : Self.barWidth(layout, mode, state.track, counting: countdown.session != nil, rang: countdown.rang)
-        let h = layout.bar.height + (state.expanded ? Self.card(state.track) : 0)
+        let h = layout.bar.height + (state.expanded ? Self.card(state.track, state.tab) : 0)
         let f = window.frame
         return NSRect(x: f.midX - w / 2, y: f.maxY - h, width: w, height: h)
             .insetBy(dx: 0, dy: -2)   // the pointer can sit on the screen's top edge
@@ -300,7 +336,7 @@ private final class Pill {
 
     init(screen: NSScreen, mode: PillMode, color: NSColor, track: Track?, output: Output, listening: ListeningMode?, expanded: Bool,
          menu: NSMenu?,
-         tap: AudioTap, glance: Glance, countdown: Countdown, onCommand: @escaping (MediaCommand) -> Void, onOpen: @escaping () -> Void) {
+         tap: AudioTap, glance: Glance, countdown: Countdown, shelf: Shelf, clipboard: Clipboard, onCommand: @escaping (MediaCommand) -> Void, onOpen: @escaping () -> Void) {
         layout = screen.pillLayout()
         self.mode = mode
         self.countdown = countdown
@@ -330,7 +366,8 @@ private final class Pill {
         window.contentView = root
 
         let view = PillView(layout: layout, mode: mode, color: color,
-                            reduceMotion: reduceMotion, state: state, tap: tap, glance: glance, countdown: countdown, onCommand: { [weak self] in self?.send($0) },
+                            reduceMotion: reduceMotion, state: state, tap: tap, glance: glance, countdown: countdown, shelf: shelf, clipboard: clipboard,
+                            onCommand: { [weak self] in self?.send($0) },
                             onOpen: onOpen)
         let host = FirstClickHostingView(rootView: view)
         host.frame = root.bounds
@@ -351,8 +388,10 @@ private final class Pill {
 
     func setListening(_ mode: ListeningMode?) { state.listening = mode }
 
-    func setExpanded(_ on: Bool) {
+    // Every opening starts on the tab asked for; closing keeps the tab, so the card doesn't change as it leaves.
+    func setExpanded(_ on: Bool, tab: CardTab = .now) {
         guard on != state.expanded else { return }
+        if on { state.tab = tab }
         withAnimation(reduceMotion ? nil : on ? PillView.open : PillView.close) { state.expanded = on }
     }
 
@@ -402,6 +441,8 @@ private struct PillView: View {
     let tap: AudioTap
     let glance: Glance
     @ObservedObject var countdown: Countdown
+    let shelf: Shelf
+    let clipboard: Clipboard
     let onCommand: (MediaCommand) -> Void
     let onOpen: () -> Void
     @Namespace private var space
@@ -414,7 +455,7 @@ private struct PillView: View {
 
     var body: some View {
         let h = layout.bar.height
-        let card = Pill.card(state.track)
+        let card = Pill.card(state.track, state.tab)
         let width = open ? layout.open.width : Pill.barWidth(layout, mode, state.track, counting: countdown.session != nil, rang: countdown.rang)
         let radius: CGFloat = open ? 24 : min(13, h / 2 - 1)   // a 24pt menu bar can't take 13pt corners
         let shape = UnevenRoundedRectangle(bottomLeadingRadius: radius, bottomTrailingRadius: radius)
@@ -443,6 +484,14 @@ private struct PillView: View {
             icons
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .onDrop(of: [.fileURL], isTargeted: nil) { providers in
+            for provider in providers {
+                _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                    if let url { DispatchQueue.main.async { shelf.add([url]) } }
+                }
+            }
+            return true
+        }
     }
 
     // Each icon follows the spot marked for it: in the bar, or in the card once it's open.
@@ -451,7 +500,7 @@ private struct PillView: View {
     private var icons: some View {
         let stateOpacity: Double = open ? (mode == .anc ? 1 : 0) : state.track != nil ? 0 : idle ? 0.45 : 1
         return ZStack {
-            if state.track != nil {
+            if state.track != nil, !open || state.tab == .now {   // the other tabs have no place for it
                 art
                     .aspectRatio(1, contentMode: .fit)
                     .matchedGeometryEffect(id: Spot.art, in: space, isSource: false)
@@ -572,18 +621,45 @@ private struct PillView: View {
                     }
                 }
                 Spacer(minLength: 0)
+                tabs
             }
             .frame(height: Pill.chips)
             Rectangle().fill(.white.opacity(0.08)).frame(height: 1)
-            if let track = state.track {
-                player(track).frame(height: Pill.player)
-            } else {
-                Color.clear.frame(height: Pill.tilesGap)
+            switch state.tab {
+            case .now:
+                if let track = state.track {
+                    player(track).frame(height: Pill.player)
+                } else {
+                    Color.clear.frame(height: Pill.tilesGap)
+                }
+                Tiles(glance: glance, countdown: countdown, tint: tint, reduceMotion: reduceMotion)
+                    .frame(height: Pill.tiles, alignment: .top)
+            case .shelf:
+                ShelfView(shelf: shelf, reduceMotion: reduceMotion).frame(height: Pill.player + Pill.tiles)
+            case .clipboard:
+                ClipboardView(clipboard: clipboard, reduceMotion: reduceMotion).frame(height: Pill.player + Pill.tiles)
             }
-            Tiles(glance: glance, countdown: countdown, tint: tint, reduceMotion: reduceMotion)
-                .frame(height: Pill.tiles, alignment: .top)
         }
         .padding(.horizontal, Self.margin)
+    }
+
+    private var tabs: some View {
+        HStack(spacing: 2) {
+            ForEach(CardTab.allCases, id: \.self) { tab in
+                Button {
+                    withAnimation(reduceMotion ? nil : Self.open) { state.tab = tab }
+                } label: {
+                    Image(systemName: tab.symbol)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(state.tab == tab ? tint : .white.opacity(0.4))
+                        .frame(width: 32, height: 26)
+                        .background(state.tab == tab ? tint.opacity(0.2) : .clear, in: Capsule())
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(Press(reduceMotion: reduceMotion))
+                .accessibilityLabel(tab.label)
+            }
+        }
     }
 
     // The headphones' own mode when it is known and isn't Noise Cancellation; otherwise just on or off.
@@ -695,6 +771,99 @@ private struct PillView: View {
         .buttonStyle(Press(reduceMotion: reduceMotion))
         .accessibilityLabel(name)
     }
+}
+
+// The shelf tab: the parked files in a row. Click one to open it, drag it out to use it, the cross to take it off.
+private struct ShelfView: View {
+    @ObservedObject var shelf: Shelf
+    let reduceMotion: Bool
+
+    var body: some View {
+        if shelf.files.isEmpty {
+            hint("Drop files on the pill to keep them here. Drag one out to use it.")
+        } else {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(shelf.files, id: \.self) { file in
+                        Button { NSWorkspace.shared.open(file) } label: {
+                            VStack(spacing: 4) {
+                                Image(nsImage: NSWorkspace.shared.icon(forFile: file.path)).resizable().frame(width: 44, height: 44)
+                                Text(file.lastPathComponent)
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundStyle(.white.opacity(0.8))
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                            }
+                            .padding(.horizontal, 6)
+                            .frame(width: 92, height: 84)
+                            .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        }
+                        .buttonStyle(Press(reduceMotion: reduceMotion))
+                        .accessibilityLabel("Open \(file.lastPathComponent)")
+                        .onDrag { NSItemProvider(contentsOf: file) ?? NSItemProvider() }
+                        .overlay(alignment: .topTrailing) {
+                            Button { shelf.remove(file) } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.white.opacity(0.5))
+                                    .frame(width: 22, height: 22)
+                            }
+                            .buttonStyle(Press(reduceMotion: reduceMotion))
+                            .accessibilityLabel("Remove \(file.lastPathComponent) from the shelf")
+                        }
+                        .help(file.path)
+                    }
+                }
+            }
+            .frame(maxHeight: .infinity, alignment: .top)
+            .padding(.top, 10)
+        }
+    }
+}
+
+// The clipboard tab: what was copied lately, newest first. Click one to copy it again.
+private struct ClipboardView: View {
+    @ObservedObject var clipboard: Clipboard
+    let reduceMotion: Bool
+
+    var body: some View {
+        if clipboard.items.isEmpty {
+            hint("What you copy shows up here. Click one to copy it again.")
+        } else {
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 6) {
+                    ForEach(clipboard.items, id: \.self) { text in
+                        Button { clipboard.copy(text) } label: {
+                            HStack {
+                                // One line of it: the first that has anything on it.
+                                Text(text.split(whereSeparator: \.isNewline).first { !$0.allSatisfy(\.isWhitespace) }.map(String.init) ?? text)
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundStyle(.white.opacity(0.9))
+                                    .lineLimit(1)
+                                Spacer(minLength: 8)
+                                Image(systemName: "doc.on.doc").font(.system(size: 10, weight: .semibold)).foregroundStyle(.white.opacity(0.4))
+                            }
+                            .padding(.horizontal, 10)
+                            .frame(height: 26)
+                            .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(Press(reduceMotion: reduceMotion))
+                        .accessibilityLabel("Copy \(text)")
+                    }
+                }
+                .padding(.vertical, 10)
+            }
+        }
+    }
+}
+
+// What an empty tab says in place of its content.
+private func hint(_ text: String) -> some View {
+    Text(text)
+        .font(.system(size: 12, weight: .medium))
+        .foregroundStyle(.white.opacity(0.5))
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
 }
 
 // The card's last row: one small tile per thing worth a glance. Only this view redraws as readings change.

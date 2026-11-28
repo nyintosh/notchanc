@@ -113,6 +113,24 @@ struct CountdownTests {
     }
 }
 
+struct ClipboardTests {
+    @Test func adding() {
+        #expect(Clipboard.adding("b", to: ["a"]) == ["b", "a"])
+        #expect(Clipboard.adding("a", to: ["b", "a"]) == ["a", "b"])
+        #expect(Clipboard.adding(" \n", to: ["a"]) == ["a"])
+        let full = (1...Clipboard.limit).map(String.init)
+        #expect(Clipboard.adding("new", to: full) == ["new"] + full.dropLast())
+    }
+}
+
+struct ShelfTests {
+    @Test func adding() {
+        let a = URL(fileURLWithPath: "/tmp/a.pdf"), b = URL(fileURLWithPath: "/tmp/b.png")
+        #expect(Shelf.adding([b], to: [a]) == [a, b])
+        #expect(Shelf.adding([a, b, b], to: [a]) == [a, b])
+    }
+}
+
 struct ColorTests {
     @Test func hexRoundTrip() {
         for hex in ["#FF9F0A", "#0A84FF", "#000000", "#FFFFFF"] { #expect(NSColor(hex: hex)?.hex == hex) }
