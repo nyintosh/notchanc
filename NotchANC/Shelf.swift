@@ -18,6 +18,8 @@ final class Shelf: ObservableObject {
 
     func remove(_ file: URL) { set(files.filter { $0 != file }) }
 
+    func removeAll() { set([]) }
+
     private func set(_ files: [URL]) {
         guard files != self.files else { return }
         self.files = files

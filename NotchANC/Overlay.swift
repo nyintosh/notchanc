@@ -465,7 +465,7 @@ private struct PillView: View {
     let tap: AudioTap
     let glance: Glance
     @ObservedObject var countdown: Countdown
-    let shelf: Shelf
+    @ObservedObject var shelf: Shelf           // whether it holds anything decides if Remove all shows
     @ObservedObject var clipboard: Clipboard   // its count sets the clipboard tab's height
     let onCommand: (MediaCommand) -> Void
     let onOpen: () -> Void
@@ -652,6 +652,7 @@ private struct PillView: View {
                     }
                 }
                 Spacer(minLength: 0)
+                empty
                 tabs
             }
             .frame(height: Pill.chips)
@@ -673,6 +674,30 @@ private struct PillView: View {
             }
         }
         .padding(.horizontal, Self.margin)
+    }
+
+    // Beside the tabs while the shelf or the clipboard is open and holds something: one press empties it.
+    @ViewBuilder private var empty: some View {
+        if state.tab == .shelf, !shelf.files.isEmpty {
+            emptyButton("Remove all") { shelf.removeAll() }
+        } else if state.tab == .clipboard, !clipboard.items.isEmpty {
+            emptyButton("Clear all") { clipboard.clear() }
+        }
+    }
+
+    private func emptyButton(_ title: String, action: @escaping () -> Void) -> some View {
+        Button {
+            withAnimation(reduceMotion ? nil : Self.open, action)
+        } label: {
+            Text(title)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.white.opacity(0.85))
+                .padding(.horizontal, 10)
+                .frame(height: 26)
+                .background(.white.opacity(0.1), in: Capsule())
+                .contentShape(Capsule())
+        }
+        .buttonStyle(Press(reduceMotion: reduceMotion))
     }
 
     // No tab bar when both extra tabs are turned off.

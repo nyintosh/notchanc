@@ -32,6 +32,9 @@ final class Clipboard: ObservableObject {
         items = Self.adding(text, to: items)
     }
 
+    // Forgets the history; whatever is on the pasteboard itself stays there.
+    func clear() { items = [] }
+
     // Copying one again puts it on the pasteboard; the next check moves it to the top.
     func copy(_ text: String) {
         board.clearContents()
