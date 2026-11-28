@@ -682,6 +682,7 @@ private struct Tiles: View {
                 tile(headphones.main == nil ? "airpodspro" : "headphones", headphones.name, "\(level)%",
                      headphones.charger.map { "Case \($0)%" })
             }
+            calendar
             if let battery = glance.mac.battery {
                 tile("laptopcomputer", "Mac", "\(battery)%",
                      glance.mac.charging ? "Charging · CPU \(glance.mac.processor)%" : "CPU \(glance.mac.processor)%")
@@ -690,6 +691,34 @@ private struct Tiles: View {
             }
             timer
             Spacer(minLength: 0)
+        }
+    }
+
+    // The next event; before that, a button to let the app read the calendar. Hidden once access is refused.
+    @ViewBuilder private var calendar: some View {
+        switch glance.calendar {
+        case .fullAccess:
+            if let event = glance.event {
+                TimelineView(.everyMinute) { context in
+                    tile("calendar", "Next", event.title, event.when(at: context.date))
+                }
+            } else {
+                tile("calendar", "Next", "Nothing", "in the next day")
+            }
+        case .notDetermined:
+            box {
+                caption("calendar", "Next")
+                Button("Show events") { glance.askForCalendar() }
+                    .buttonStyle(Press(reduceMotion: reduceMotion))
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .padding(.horizontal, 8)
+                    .frame(height: 22)
+                    .background(.white.opacity(0.1), in: Capsule())
+                    .padding(.top, 5)
+            }
+        default:
+            EmptyView()
         }
     }
 

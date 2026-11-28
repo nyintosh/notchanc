@@ -87,6 +87,17 @@ struct GlanceTests {
         #expect(found?.level == 90)
         #expect(Glance.headphones(in: Data("{}".utf8)) == nil)
     }
+
+    @Test func when() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let event = { (start: TimeInterval) in NextEvent(title: "Standup", start: now.addingTimeInterval(start), end: now.addingTimeInterval(start + 1800)) }
+        #expect(event(-600).when(at: now) == "Now")
+        #expect(event(0).when(at: now) == "Now")
+        #expect(event(30).when(at: now) == "in 1 min")
+        #expect(event(12 * 60).when(at: now) == "in 12 min")
+        #expect(event(59 * 60).when(at: now) == "in 59 min")
+        #expect(event(60 * 60).when(at: now).hasPrefix("at "))
+    }
 }
 
 struct CountdownTests {

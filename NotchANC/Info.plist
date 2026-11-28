@@ -10,6 +10,8 @@
 	<string>NotchANC listens to what's playing to move the visualizer beside the notch. The sound stays on your Mac and is never recorded.</string>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>NotchANC switches to the tab that's playing when you click the track in the pill.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>NotchANC shows your next event in the card that opens from the pill. It only reads; nothing leaves your Mac.</string>
 	<key>SUFeedURL</key>
 	<string>https://raw.githubusercontent.com/nyintosh/notchanc/main/appcast.xml</string>
 	<key>SUPublicEDKey</key>

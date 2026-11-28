@@ -1,6 +1,7 @@
-// What the idle card's tiles show: the headphones' battery and the Mac's battery and processor load.
-// Read only while a pill is open.
+// What the card's tiles show: the headphones' battery, the next calendar event, and the Mac's battery and
+// processor load. Read only while a pill is open.
 
+import EventKit
 import Foundation
 import IOKit.ps
 
@@ -15,6 +16,19 @@ struct Headphones: Equatable {
     var level: Int? { [left, right, main].compactMap { $0 }.min() }
 }
 
+struct NextEvent: Equatable {
+    var title: String
+    var start: Date
+    var end: Date
+
+    // "Now" once it has started, minutes inside the hour before, otherwise its time.
+    func when(at now: Date) -> String {
+        if start <= now { return "Now" }
+        let minutes = Int((start.timeIntervalSince(now) / 60).rounded(.up))
+        return minutes < 60 ? "in \(minutes) min" : "at \(start.formatted(date: .omitted, time: .shortened))"
+    }
+}
+
 struct MacStats: Equatable {
     var battery: Int?   // nil on a Mac without one
     var charging = false
@@ -24,6 +38,9 @@ struct MacStats: Equatable {
 final class Glance: ObservableObject {
     @Published private(set) var headphones: Headphones?
     @Published private(set) var mac = MacStats()
+    @Published private(set) var event: NextEvent?
+    @Published private(set) var calendar = EKEventStore.authorizationStatus(for: .event)
+    private let store = EKEventStore()
     private var timer: Timer?
     private var ticks: (busy: UInt64, total: UInt64)?
     private var readings = 0
@@ -52,9 +69,32 @@ final class Glance: ObservableObject {
         }
         ticks = now
         if mac != self.mac { self.mac = mac }
-        // Battery levels move slowly: every 30 seconds is plenty.
-        if readings % 15 == 0 { readHeadphones() }
+        // Battery levels and the calendar move slowly: every 30 seconds is plenty.
+        if readings % 15 == 0 {
+            readHeadphones()
+            readEvent()
+        }
         readings += 1
+    }
+
+    // Asked from the tile's own button, the first time the user wants it.
+    func askForCalendar() {
+        store.requestFullAccessToEvents { [weak self] _, _ in
+            DispatchQueue.main.async {
+                self?.calendar = EKEventStore.authorizationStatus(for: .event)
+                self?.readEvent()
+            }
+        }
+    }
+
+    // The next timed event in the coming day; one under way counts until it ends.
+    private func readEvent() {
+        guard calendar == .fullAccess else { return }
+        let now = Date()
+        let events = store.events(matching: store.predicateForEvents(withStart: now, end: now.addingTimeInterval(24 * 3600), calendars: nil))
+        let next = events.filter { !$0.isAllDay && $0.endDate > now }.min { $0.startDate < $1.startDate }
+            .map { NextEvent(title: $0.title ?? "", start: $0.startDate, end: $0.endDate) }
+        if next != event { event = next }
     }
 
     // ponytail: no public API gives AirPods battery levels; system_profiler's report does, in about 0.1 s.
