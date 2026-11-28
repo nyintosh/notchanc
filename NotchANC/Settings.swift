@@ -92,8 +92,10 @@ private struct GeneralTab: View {
                     .pickerStyle(.segmented)
                     .labelsHidden()
                     .fixedSize()
-                    shortcutPicker("When it starts, run", selection: $startShortcut)
-                    shortcutPicker("When it ends, run", selection: $endShortcut)
+                    Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 6) {
+                        shortcutRow("When it starts, run", selection: $startShortcut)
+                        shortcutRow("When it ends, run", selection: $endShortcut)
+                    }
                     Text("macOS lets no app switch Focus, so pick Shortcuts that turn yours on and off.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
@@ -109,13 +111,17 @@ private struct GeneralTab: View {
     }
 
     // A chosen Shortcut that was since deleted stays listed, so the menu still shows what is stored.
-    private func shortcutPicker(_ title: String, selection: Binding<String>) -> some View {
-        Picker(title, selection: selection) {
-            Text("Nothing").tag("")
-            ForEach(shortcuts.contains(selection.wrappedValue) || selection.wrappedValue.isEmpty
-                    ? shortcuts : shortcuts + [selection.wrappedValue], id: \.self) { Text($0).tag($0) }
+    private func shortcutRow(_ title: String, selection: Binding<String>) -> some View {
+        GridRow {
+            Text(title)
+            Picker(title, selection: selection) {
+                Text("Nothing").tag("")
+                ForEach(shortcuts.contains(selection.wrappedValue) || selection.wrappedValue.isEmpty
+                        ? shortcuts : shortcuts + [selection.wrappedValue], id: \.self) { Text($0).tag($0) }
+            }
+            .labelsHidden()
+            .fixedSize()
         }
-        .fixedSize()
     }
 }
 
