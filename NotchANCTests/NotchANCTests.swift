@@ -131,6 +131,15 @@ struct ClipboardTests {
     }
 }
 
+struct ClipboardPinTests {
+    @Test func togglingPin() {
+        let pinned = Clipboard.togglingPin("b", pinned: ["x"], items: ["a", "b", "c"])
+        #expect(pinned.pinned == ["x", "b"] && pinned.items == ["a", "c"])
+        let unpinned = Clipboard.togglingPin("x", pinned: ["x", "b"], items: ["a", "c"])
+        #expect(unpinned.pinned == ["b"] && unpinned.items == ["x", "a", "c"])
+    }
+}
+
 struct ClipboardKindTests {
     @Test func kind() {
         #expect(Clipboard.kind(of: "https://example.com/docs") == .link)

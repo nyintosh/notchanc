@@ -170,7 +170,7 @@ private struct CardPane: View {
                 Toggle("File shelf", isOn: $shelf)
                 Toggle(isOn: $clipboard) {
                     Text("Clipboard history")
-                    Text("Kept in memory only, and never anything a password manager marks as secret.")
+                    Text("Kept in memory only, except what you pin. Never anything a password manager marks as secret.")
                 }
             }
         }

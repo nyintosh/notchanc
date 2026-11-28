@@ -353,7 +353,7 @@ private final class Pill {
     // the pill is centred in it and fills only what's shown.
     var hitRect: NSRect {
         let w = state.expanded ? layout.open.width : Self.barWidth(layout, mode, state.track, counting: countdown.session != nil, rang: countdown.rang)
-        let h = layout.bar.height + (state.expanded ? Self.card(state.track, state.tab, copies: clipboard.items.count) : 0)
+        let h = layout.bar.height + (state.expanded ? Self.card(state.track, state.tab, copies: clipboard.all.count) : 0)
         let f = window.frame
         return NSRect(x: f.midX - w / 2, y: f.maxY - h, width: w, height: h)
             .insetBy(dx: 0, dy: -2)   // the pointer can sit on the screen's top edge
@@ -499,7 +499,7 @@ private struct PillView: View {
 
     var body: some View {
         let h = layout.bar.height
-        let card = Pill.card(state.track, state.tab, copies: clipboard.items.count)
+        let card = Pill.card(state.track, state.tab, copies: clipboard.all.count)
         let width = open ? layout.open.width : Pill.barWidth(layout, mode, state.track, counting: countdown.session != nil, rang: countdown.rang)
         let radius: CGFloat = open ? 24 : min(13, h / 2 - 1)   // a 24pt menu bar can't take 13pt corners
         let shape = UnevenRoundedRectangle(bottomLeadingRadius: radius, bottomTrailingRadius: radius)
@@ -692,7 +692,7 @@ private struct PillView: View {
                     .frame(height: Pill.shelf)
             case .clipboard:
                 ClipboardView(clipboard: clipboard, query: $state.query, tint: tint, reduceMotion: reduceMotion)
-                    .frame(height: Pill.clipboard(clipboard.items.count))
+                    .frame(height: Pill.clipboard(clipboard.all.count))
             }
         }
         .padding(.horizontal, Self.margin)
@@ -902,7 +902,8 @@ private struct TabTools: View {
     let prompt: String
     @Binding var query: String
     let remove: String
-    let isEmpty: Bool
+    let nothingToSearch: Bool
+    let nothingToRemove: Bool
     let reduceMotion: Bool
     let action: () -> Void
 
@@ -925,7 +926,7 @@ private struct TabTools: View {
             .padding(.horizontal, 10)
             .frame(height: 26)
             .background(.white.opacity(0.08), in: Capsule())
-            .disabled(isEmpty)
+            .disabled(nothingToSearch)
             Button {
                 withAnimation(reduceMotion ? nil : PillView.open, action)
             } label: {
@@ -938,8 +939,8 @@ private struct TabTools: View {
                     .contentShape(Capsule())
             }
             .buttonStyle(Press(reduceMotion: reduceMotion))
-            .disabled(isEmpty)
-            .opacity(isEmpty ? 0.4 : 1)
+            .disabled(nothingToRemove)
+            .opacity(nothingToRemove ? 0.4 : 1)
         }
         .environment(\.colorScheme, .dark)   // the pill is always dark, whatever the system wears
     }
@@ -969,8 +970,8 @@ private struct ShelfView: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            TabTools(prompt: "Search files", query: $query, remove: "Remove all", isEmpty: shelf.files.isEmpty,
-                     reduceMotion: reduceMotion) { shelf.removeAll() }
+            TabTools(prompt: "Search files", query: $query, remove: "Remove all", nothingToSearch: shelf.files.isEmpty,
+                     nothingToRemove: shelf.files.isEmpty, reduceMotion: reduceMotion) { shelf.removeAll() }
             if shelf.files.isEmpty {
                 EmptySlot(symbol: "tray.and.arrow.down", title: "Drop files here",
                           detail: "They stay where they are. Drag one out to use it.", lit: dropping, tint: tint)
@@ -1017,8 +1018,8 @@ private struct ShelfView: View {
     }
 }
 
-// The clipboard tab: its tools, then what was copied lately, newest first, each marked by what it is.
-// Click one to copy it again.
+// The clipboard tab: its tools, then the pinned copies and what was copied lately, newest first, each marked by
+// what it is. Click one to copy it again; its pin keeps it. Clear all leaves the pinned ones.
 private struct ClipboardView: View {
     @ObservedObject var clipboard: Clipboard
     @Binding var query: String
@@ -1027,14 +1028,14 @@ private struct ClipboardView: View {
     @State private var copied: String?   // the row just clicked, ticked for a moment
 
     private var found: [String] {
-        query.isEmpty ? clipboard.items : clipboard.items.filter { $0.localizedCaseInsensitiveContains(query) }
+        query.isEmpty ? clipboard.all : clipboard.all.filter { $0.localizedCaseInsensitiveContains(query) }
     }
 
     var body: some View {
         VStack(spacing: 8) {
-            TabTools(prompt: "Search copies", query: $query, remove: "Clear all", isEmpty: clipboard.items.isEmpty,
-                     reduceMotion: reduceMotion) { clipboard.clear() }
-            if clipboard.items.isEmpty {
+            TabTools(prompt: "Search copies", query: $query, remove: "Clear all", nothingToSearch: clipboard.all.isEmpty,
+                     nothingToRemove: clipboard.items.isEmpty, reduceMotion: reduceMotion) { clipboard.clear() }
+            if clipboard.all.isEmpty {
                 EmptySlot(symbol: "doc.on.clipboard", title: "Nothing copied yet",
                           detail: "What you copy shows up here. Click one to copy it again.", tint: tint)
             } else if found.isEmpty {
@@ -1048,34 +1049,53 @@ private struct ClipboardView: View {
             }
         }
         .padding(.top, Pill.tilesGap)
-        .padding(.bottom, clipboard.items.isEmpty ? 14 : 12)
+        .padding(.bottom, clipboard.all.isEmpty ? 14 : 12)
     }
 
     private func row(_ text: String) -> some View {
-        Button {
-            clipboard.copy(text)
-            copied = text
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { if copied == text { copied = nil } }
-        } label: {
-            HStack(spacing: 8) {
-                mark(Clipboard.kind(of: text)).frame(width: 18)
-                // One line of it: the first that has anything on it.
-                Text(text.split(whereSeparator: \.isNewline).first { !$0.allSatisfy(\.isWhitespace) }.map(String.init) ?? text)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.9))
-                    .lineLimit(1)
-                Spacer(minLength: 8)
-                Image(systemName: copied == text ? "checkmark" : "doc.on.doc")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(copied == text ? tint : .white.opacity(0.4))
+        let isPinned = clipboard.pinned.contains(text)
+        return HStack(spacing: 0) {
+            Button { copy(text) } label: {
+                HStack(spacing: 8) {
+                    mark(Clipboard.kind(of: text)).frame(width: 18)
+                    // One line of it: the first that has anything on it.
+                    Text(text.split(whereSeparator: \.isNewline).first { !$0.allSatisfy(\.isWhitespace) }.map(String.init) ?? text)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.9))
+                        .lineLimit(1)
+                    Spacer(minLength: 8)
+                }
+                .padding(.leading, 10)
+                .frame(height: Pill.clipRow)
+                .contentShape(Rectangle())
             }
-            .padding(.horizontal, 10)
-            .frame(height: Pill.clipRow)
-            .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-            .contentShape(Rectangle())
+            .buttonStyle(Press(reduceMotion: reduceMotion))
+            .accessibilityLabel("Copy \(text)")
+            Button {
+                withAnimation(reduceMotion ? nil : PillView.open) { clipboard.togglePin(text) }
+            } label: {
+                Image(systemName: isPinned ? "pin.fill" : "pin")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(isPinned ? tint : .white.opacity(0.4))
+                    .frame(width: 28, height: Pill.clipRow)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(Press(reduceMotion: reduceMotion))
+            .accessibilityLabel(isPinned ? "Unpin" : "Pin")
+            Image(systemName: copied == text ? "checkmark" : "doc.on.doc")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(copied == text ? tint : .white.opacity(0.4))
+                .frame(width: 24)
+                .padding(.trailing, 6)
+                .accessibilityHidden(true)
         }
-        .buttonStyle(Press(reduceMotion: reduceMotion))
-        .accessibilityLabel("Copy \(text)")
+        .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+    }
+
+    private func copy(_ text: String) {
+        clipboard.copy(text)
+        copied = text
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { if copied == text { copied = nil } }
     }
 
     // A link, a colour shown as itself, or plain text.
