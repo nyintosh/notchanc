@@ -38,6 +38,19 @@ final class Clipboard: ObservableObject {
         board.setString(text, forType: .string)
     }
 
+    enum Kind: Equatable {
+        case link, color(NSColor), text
+    }
+
+    // What a copy is, for the mark beside it: a web link, a "#RRGGBB" colour, or text.
+    static func kind(of text: String) -> Kind {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let color = NSColor(hex: trimmed) { return .color(color) }
+        if !trimmed.contains(where: \.isWhitespace), let url = URL(string: trimmed), let scheme = url.scheme,
+           ["http", "https"].contains(scheme.lowercased()), url.host != nil { return .link }
+        return .text
+    }
+
     // Newest first, each text once, blank text ignored, the oldest dropped past the limit.
     static func adding(_ text: String, to items: [String]) -> [String] {
         guard !text.allSatisfy(\.isWhitespace) else { return items }

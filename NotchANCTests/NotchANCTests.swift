@@ -131,6 +131,17 @@ struct ClipboardTests {
     }
 }
 
+struct ClipboardKindTests {
+    @Test func kind() {
+        #expect(Clipboard.kind(of: "https://example.com/docs") == .link)
+        #expect(Clipboard.kind(of: " http://example.com\n") == .link)
+        #expect(Clipboard.kind(of: "see https://example.com") == .text)
+        #expect(Clipboard.kind(of: "mailto:someone") == .text)
+        #expect(Clipboard.kind(of: "#0A84FF") == .color(NSColor(hex: "#0A84FF")!))
+        #expect(Clipboard.kind(of: "Meeting moved to 3 pm") == .text)
+    }
+}
+
 struct ShelfTests {
     @Test func adding() {
         let a = URL(fileURLWithPath: "/tmp/a.pdf"), b = URL(fileURLWithPath: "/tmp/b.png")

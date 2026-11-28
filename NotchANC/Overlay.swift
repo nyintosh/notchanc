@@ -300,6 +300,7 @@ private final class Pill {
     private let layout: PillLayout
     private let mode: PillMode
     private let countdown: Countdown
+    private let clipboard: Clipboard
     private let state: PillState
     private let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
     private let onCommand: (MediaCommand) -> Void
@@ -309,9 +310,25 @@ private final class Pill {
     var collapseTimer: Timer?
 
     // The card under the bar: the chips, a hairline, the player if there is a track, then the tiles.
-    // The shelf and the clipboard take the room of the player and the tiles, track or not.
-    static func card(_ track: Track?, _ tab: CardTab) -> CGFloat {
-        chips + 1 + (track == nil && tab == .now ? tilesGap : player) + tiles
+    static let shelf: CGFloat = 108     // the shelf tab: one row of files, or the drop zone
+    static let clipRow: CGFloat = 30    // one copy in the clipboard tab
+    static let clipGap: CGFloat = 6
+    static let clipRows = 4             // shown before the list scrolls
+
+    // The clipboard tab is as tall as its copies, up to four; empty, it is the shelf's size, for the same kind of box.
+    static func clipboard(_ copies: Int) -> CGFloat {
+        guard copies > 0 else { return shelf }
+        let rows = CGFloat(min(copies, clipRows))
+        return tilesGap + rows * clipRow + (rows - 1) * clipGap + 12
+    }
+
+    // Under the chips and the hairline, each tab takes only the room its content needs.
+    static func card(_ track: Track?, _ tab: CardTab, copies: Int) -> CGFloat {
+        switch tab {
+        case .now: chips + 1 + (track == nil ? tilesGap : player) + tiles
+        case .shelf: chips + 1 + shelf
+        case .clipboard: chips + 1 + clipboard(copies)
+        }
     }
 
     // What the bar says on a display without a cutout.
@@ -334,7 +351,7 @@ private final class Pill {
     // the pill is centred in it and fills only what's shown.
     var hitRect: NSRect {
         let w = state.expanded ? layout.open.width : Self.barWidth(layout, mode, state.track, counting: countdown.session != nil, rang: countdown.rang)
-        let h = layout.bar.height + (state.expanded ? Self.card(state.track, state.tab) : 0)
+        let h = layout.bar.height + (state.expanded ? Self.card(state.track, state.tab, copies: clipboard.items.count) : 0)
         let f = window.frame
         return NSRect(x: f.midX - w / 2, y: f.maxY - h, width: w, height: h)
             .insetBy(dx: 0, dy: -2)   // the pointer can sit on the screen's top edge
@@ -346,6 +363,7 @@ private final class Pill {
         layout = screen.pillLayout()
         self.mode = mode
         self.countdown = countdown
+        self.clipboard = clipboard
         uuid = screen.uuid
         state = PillState(output: output, listening: listening, expanded: expanded)
         self.onCommand = onCommand
@@ -448,9 +466,11 @@ private struct PillView: View {
     let glance: Glance
     @ObservedObject var countdown: Countdown
     let shelf: Shelf
-    let clipboard: Clipboard
+    @ObservedObject var clipboard: Clipboard   // its count sets the clipboard tab's height
     let onCommand: (MediaCommand) -> Void
     let onOpen: () -> Void
+    @State private var dropping = false   // files are being held over the pill
+    @AppStorage(CardPart.headphones.rawValue) private var showsBattery = true
     @AppStorage(CardPart.shelf.rawValue) private var showsShelf = true
     @AppStorage(CardPart.clipboard.rawValue) private var showsClipboard = true
     @Namespace private var space
@@ -463,7 +483,7 @@ private struct PillView: View {
 
     var body: some View {
         let h = layout.bar.height
-        let card = Pill.card(state.track, state.tab)
+        let card = Pill.card(state.track, state.tab, copies: clipboard.items.count)
         let width = open ? layout.open.width : Pill.barWidth(layout, mode, state.track, counting: countdown.session != nil, rang: countdown.rang)
         let radius: CGFloat = open ? 24 : min(13, h / 2 - 1)   // a 24pt menu bar can't take 13pt corners
         let shape = UnevenRoundedRectangle(bottomLeadingRadius: radius, bottomTrailingRadius: radius)
@@ -492,7 +512,7 @@ private struct PillView: View {
             icons
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .onDrop(of: [.fileURL], isTargeted: nil) { providers in
+        .onDrop(of: [.fileURL], isTargeted: $dropping) { providers in
             guard showsShelf else { return false }
             for provider in providers {
                 _ = provider.loadObject(ofClass: URL.self) { url, _ in
@@ -627,6 +647,8 @@ private struct PillView: View {
                 if !state.output.name.isEmpty {
                     chip(state.output.volume.map { "\(state.output.name) · \($0)%" } ?? state.output.name, on: false) {
                         chipIcon(state.output.headphones ? "headphones" : "speaker.wave.2.fill")
+                    } trailing: {
+                        if showsBattery, state.output.headphones { HeadphonesBattery(glance: glance) }
                     }
                 }
                 Spacer(minLength: 0)
@@ -644,9 +666,10 @@ private struct PillView: View {
                 Tiles(glance: glance, countdown: countdown, tint: tint, reduceMotion: reduceMotion)
                     .frame(height: Pill.tiles, alignment: .top)
             case .shelf:
-                ShelfView(shelf: shelf, reduceMotion: reduceMotion).frame(height: Pill.player + Pill.tiles)
+                ShelfView(shelf: shelf, dropping: dropping, tint: tint, reduceMotion: reduceMotion).frame(height: Pill.shelf)
             case .clipboard:
-                ClipboardView(clipboard: clipboard, reduceMotion: reduceMotion).frame(height: Pill.player + Pill.tiles)
+                ClipboardView(clipboard: clipboard, tint: tint, reduceMotion: reduceMotion)
+                    .frame(height: Pill.clipboard(clipboard.items.count))
             }
         }
         .padding(.horizontal, Self.margin)
@@ -687,12 +710,17 @@ private struct PillView: View {
     }
 
     private func chip(_ text: String, on: Bool, @ViewBuilder icon: () -> some View) -> some View {
+        chip(text, on: on, icon: icon) { EmptyView() }
+    }
+
+    private func chip(_ text: String, on: Bool, @ViewBuilder icon: () -> some View, @ViewBuilder trailing: () -> some View) -> some View {
         HStack(spacing: 2) {
             icon()
             Text(text)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.white.opacity(on ? 0.95 : 0.6))
                 .lineLimit(1)
+            trailing()
         }
         .padding(.leading, 4)
         .padding(.trailing, 10)
@@ -790,97 +818,175 @@ private struct PillView: View {
     }
 }
 
+// The headphones' battery, at the end of the output chip while sound goes to them. Only this view redraws with it.
+private struct HeadphonesBattery: View {
+    @ObservedObject var glance: Glance
+
+    var body: some View {
+        if let headphones = glance.headphones, let level = headphones.level {
+            HStack(spacing: 3) {
+                Text("·")
+                Image(systemName: Self.symbol(level))
+                Text("\(level)%")
+            }
+            .font(.system(size: 11, weight: .medium).monospacedDigit())
+            .foregroundStyle(.white.opacity(0.6))
+            .padding(.leading, 2)
+            .help(headphones.charger.map { "\(headphones.name), case \($0)%" } ?? headphones.name)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Headphones battery \(level) percent")
+        }
+    }
+
+    // The battery glyph nearest the level, in quarters.
+    static func symbol(_ level: Int) -> String {
+        "battery.\(min(max((level + 12) / 25 * 25, 0), 100))percent"
+    }
+}
+
+// A dashed box that says what an empty tab is for; it lights up while files are held over the pill.
+private struct EmptySlot: View {
+    let symbol: String
+    let title: String
+    let detail: String
+    var lit = false
+    let tint: Color
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: symbol)
+                .font(.system(size: 18, weight: .medium))
+                .foregroundStyle(lit ? tint : .white.opacity(0.5))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.system(size: 12, weight: .semibold)).foregroundStyle(.white.opacity(0.85))
+                Text(detail).font(.system(size: 11, weight: .medium)).foregroundStyle(.white.opacity(0.5))
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background((lit ? tint.opacity(0.12) : Color.white.opacity(0.03)), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(lit ? tint : Color.white.opacity(0.22), style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
 // The shelf tab: the parked files in a row. Click one to open it, drag it out to use it, the cross to take it off.
 private struct ShelfView: View {
     @ObservedObject var shelf: Shelf
+    let dropping: Bool
+    let tint: Color
     let reduceMotion: Bool
 
     var body: some View {
-        if shelf.files.isEmpty {
-            hint("Drop files on the pill to keep them here. Drag one out to use it.")
-        } else {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(shelf.files, id: \.self) { file in
-                        Button { NSWorkspace.shared.open(file) } label: {
-                            VStack(spacing: 4) {
-                                Image(nsImage: NSWorkspace.shared.icon(forFile: file.path)).resizable().frame(width: 44, height: 44)
-                                Text(file.lastPathComponent)
-                                    .font(.system(size: 10, weight: .medium))
-                                    .foregroundStyle(.white.opacity(0.8))
-                                    .lineLimit(1)
-                                    .truncationMode(.middle)
-                            }
-                            .padding(.horizontal, 6)
-                            .frame(width: 92, height: 84)
-                            .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        }
-                        .buttonStyle(Press(reduceMotion: reduceMotion))
-                        .accessibilityLabel("Open \(file.lastPathComponent)")
-                        .onDrag { NSItemProvider(contentsOf: file) ?? NSItemProvider() }
-                        .overlay(alignment: .topTrailing) {
-                            Button { shelf.remove(file) } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(.white.opacity(0.5))
-                                    .frame(width: 22, height: 22)
+        Group {
+            if shelf.files.isEmpty {
+                EmptySlot(symbol: "tray.and.arrow.down", title: "Drop files here",
+                          detail: "They stay where they are. Drag one out to use it.", lit: dropping, tint: tint)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(shelf.files, id: \.self) { file in
+                            Button { NSWorkspace.shared.open(file) } label: {
+                                VStack(spacing: 4) {
+                                    Image(nsImage: NSWorkspace.shared.icon(forFile: file.path)).resizable().frame(width: 44, height: 44)
+                                    Text(file.lastPathComponent)
+                                        .font(.system(size: 10, weight: .medium))
+                                        .foregroundStyle(.white.opacity(0.8))
+                                        .lineLimit(1)
+                                        .truncationMode(.middle)
+                                }
+                                .padding(.horizontal, 6)
+                                .frame(width: 92, height: 84)
+                                .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                             }
                             .buttonStyle(Press(reduceMotion: reduceMotion))
-                            .accessibilityLabel("Remove \(file.lastPathComponent) from the shelf")
+                            .accessibilityLabel("Open \(file.lastPathComponent)")
+                            .onDrag { NSItemProvider(contentsOf: file) ?? NSItemProvider() }
+                            .overlay(alignment: .topTrailing) {
+                                Button { shelf.remove(file) } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(.white.opacity(0.5))
+                                        .frame(width: 22, height: 22)
+                                }
+                                .buttonStyle(Press(reduceMotion: reduceMotion))
+                                .accessibilityLabel("Remove \(file.lastPathComponent) from the shelf")
+                            }
+                            .help(file.path)
                         }
-                        .help(file.path)
                     }
                 }
             }
-            .frame(maxHeight: .infinity, alignment: .top)
-            .padding(.top, 10)
         }
+        .padding(.top, Pill.tilesGap)
+        .padding(.bottom, 14)
     }
 }
 
-// The clipboard tab: what was copied lately, newest first. Click one to copy it again.
+// The clipboard tab: what was copied lately, newest first, each marked by what it is. Click one to copy it again.
 private struct ClipboardView: View {
     @ObservedObject var clipboard: Clipboard
+    let tint: Color
     let reduceMotion: Bool
+    @State private var copied: String?   // the row just clicked, ticked for a moment
 
     var body: some View {
-        if clipboard.items.isEmpty {
-            hint("What you copy shows up here. Click one to copy it again.")
-        } else {
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 6) {
-                    ForEach(clipboard.items, id: \.self) { text in
-                        Button { clipboard.copy(text) } label: {
-                            HStack {
-                                // One line of it: the first that has anything on it.
-                                Text(text.split(whereSeparator: \.isNewline).first { !$0.allSatisfy(\.isWhitespace) }.map(String.init) ?? text)
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundStyle(.white.opacity(0.9))
-                                    .lineLimit(1)
-                                Spacer(minLength: 8)
-                                Image(systemName: "doc.on.doc").font(.system(size: 10, weight: .semibold)).foregroundStyle(.white.opacity(0.4))
-                            }
-                            .padding(.horizontal, 10)
-                            .frame(height: 26)
-                            .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(Press(reduceMotion: reduceMotion))
-                        .accessibilityLabel("Copy \(text)")
+        Group {
+            if clipboard.items.isEmpty {
+                EmptySlot(symbol: "doc.on.clipboard", title: "Nothing copied yet",
+                          detail: "What you copy shows up here. Click one to copy it again.", tint: tint)
+            } else {
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: Pill.clipGap) {
+                        ForEach(clipboard.items, id: \.self) { text in row(text) }
                     }
                 }
-                .padding(.vertical, 10)
             }
         }
+        .padding(.top, Pill.tilesGap)
+        .padding(.bottom, clipboard.items.isEmpty ? 14 : 12)
     }
-}
 
-// What an empty tab says in place of its content.
-private func hint(_ text: String) -> some View {
-    Text(text)
-        .font(.system(size: 12, weight: .medium))
-        .foregroundStyle(.white.opacity(0.5))
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+    private func row(_ text: String) -> some View {
+        Button {
+            clipboard.copy(text)
+            copied = text
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { if copied == text { copied = nil } }
+        } label: {
+            HStack(spacing: 8) {
+                mark(Clipboard.kind(of: text)).frame(width: 18)
+                // One line of it: the first that has anything on it.
+                Text(text.split(whereSeparator: \.isNewline).first { !$0.allSatisfy(\.isWhitespace) }.map(String.init) ?? text)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                Image(systemName: copied == text ? "checkmark" : "doc.on.doc")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(copied == text ? tint : .white.opacity(0.4))
+            }
+            .padding(.horizontal, 10)
+            .frame(height: Pill.clipRow)
+            .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(Press(reduceMotion: reduceMotion))
+        .accessibilityLabel("Copy \(text)")
+    }
+
+    // A link, a colour shown as itself, or plain text.
+    @ViewBuilder private func mark(_ kind: Clipboard.Kind) -> some View {
+        switch kind {
+        case .link:
+            Image(systemName: "link").font(.system(size: 11, weight: .semibold)).foregroundStyle(tint)
+        case .color(let color):
+            Circle().fill(Color(nsColor: color)).frame(width: 12, height: 12).overlay { Circle().strokeBorder(.white.opacity(0.3), lineWidth: 1) }
+        case .text:
+            Image(systemName: "text.alignleft").font(.system(size: 11, weight: .semibold)).foregroundStyle(.white.opacity(0.5))
+        }
+    }
 }
 
 // The card's last row: one small tile per thing worth a glance. Only this view redraws as readings change.
@@ -893,7 +999,6 @@ private struct Tiles: View {
     @ObservedObject var countdown: Countdown
     let tint: Color
     let reduceMotion: Bool
-    @AppStorage(CardPart.headphones.rawValue) private var showsHeadphones = true
     @AppStorage(CardPart.calendar.rawValue) private var showsCalendar = true
     @AppStorage(CardPart.mac.rawValue) private var showsMac = true
     @AppStorage(CardPart.timer.rawValue) private var showsTimer = true
@@ -901,20 +1006,14 @@ private struct Tiles: View {
     @AppStorage(Countdown.presetKeys[1]) private var second = Countdown.presetDefaults[1]
     @AppStorage(Countdown.presetKeys[2]) private var third = Countdown.presetDefaults[2]
 
-    // The row fits four tiles' width; the Mac's takes two. With everything on it runs longer and scrolls.
+    // The row is four tiles wide: the event, the Mac's two, the timer.
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: Self.spacing) {
-                if showsHeadphones, let headphones = glance.headphones, let level = headphones.level {
-                    tile(headphones.main == nil ? "airpodspro" : "headphones", headphones.name, "\(level)%",
-                         headphones.charger.map { "Case \($0)%" })
-                }
-                if showsCalendar { calendar }
-                if showsMac { mac }
-                if showsTimer { timer }
-            }
+        HStack(spacing: Self.spacing) {
+            if showsCalendar { calendar }
+            if showsMac { mac }
+            if showsTimer { timer }
+            Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // How busy the Mac is, one ring each: processor, graphics, memory, disk.

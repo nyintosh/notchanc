@@ -158,8 +158,10 @@ private struct CardPane: View {
 
     var body: some View {
         Form {
-            Section("Tiles") {
+            Section("Status") {
                 Toggle("Headphones battery", isOn: $headphones)
+            }
+            Section("Tiles") {
                 Toggle("Next calendar event", isOn: $calendar)
                 Toggle("Mac: processor, graphics, memory, disk", isOn: $mac)
                 Toggle("Timer and focus", isOn: $timer)
