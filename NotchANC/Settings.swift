@@ -101,8 +101,8 @@ private struct AppearanceTab: View {
                     Picker("Show", selection: $visibility) {
                         ForEach(MediaVisibility.allCases, id: \.self) { Text($0.title) }
                     }
+                    .pickerStyle(.radioGroup)
                     .labelsHidden()
-                    .fixedSize()
                     StyleEditor(mode: .media).disabled(visibility == .never)
                 }
             }
