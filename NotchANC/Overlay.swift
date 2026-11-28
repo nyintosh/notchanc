@@ -323,10 +323,10 @@ private final class Pill {
         return ceil(CTLineGetTypographicBounds(line, nil, nil, nil)) + 2
     }
 
-    // The countdown takes the right end while nothing plays; a track brings its bars or pause mark, a rung timer its bell.
+    // A running countdown takes the right end; otherwise a track brings its bars or pause mark, a rung timer its bell.
     static func barWidth(_ layout: PillLayout, _ mode: PillMode, _ track: Track?, counting: Bool, rang: Bool) -> CGFloat {
         guard !layout.hasCutout else { return layout.bar.width }
-        let trailing: CGFloat? = counting && track?.playing != true ? countdownWidth : track != nil || rang ? PillLayout.icon : nil
+        let trailing: CGFloat? = counting ? countdownWidth : track != nil || rang ? PillLayout.icon : nil
         return PillLayout.barWidth(text: barText(mode, track).map(textWidth), trailing: trailing)
     }
 
@@ -580,14 +580,22 @@ private struct PillView: View {
             .allowsHitTesting(false)
     }
 
-    // The bell once a timer has rung, until the card is opened; else bars while something plays, the countdown,
-    // a pause mark while a track waits, or nothing.
+    // The bell once a timer has rung, until the card is opened; the countdown while one runs, playing or not;
+    // else bars while something plays, a pause mark while a track waits, or nothing.
     @ViewBuilder private var trailing: some View {
         if countdown.rang {
             Image(systemName: "bell.fill")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(tint)
                 .accessibilityLabel("Time's up")
+        } else if let session = countdown.session {
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                Text(Countdown.text(remaining: session.end.timeIntervalSince(context.date)))
+                    .font(.system(size: 10, weight: .semibold).monospacedDigit())
+                    .foregroundStyle(tint)
+                    .frame(width: Pill.countdownWidth, alignment: .trailing)
+            }
+            .accessibilityLabel(session.focus ? "Focus session" : "Timer")
         } else if playing {
             Group {
                 if reduceMotion {
@@ -598,14 +606,6 @@ private struct PillView: View {
             }
             .foregroundStyle(tint)
             .accessibilityLabel("Media playing")
-        } else if let session = countdown.session {
-            TimelineView(.periodic(from: .now, by: 1)) { context in
-                Text(Countdown.text(remaining: session.end.timeIntervalSince(context.date)))
-                    .font(.system(size: 10, weight: .semibold).monospacedDigit())
-                    .foregroundStyle(tint)
-                    .frame(width: Pill.countdownWidth, alignment: .trailing)
-            }
-            .accessibilityLabel(session.focus ? "Focus session" : "Timer")
         } else if state.track != nil {
             Image(systemName: "pause.fill")
                 .font(.system(size: 10, weight: .semibold))
