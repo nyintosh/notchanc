@@ -106,9 +106,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         monitor.onStatus = { [weak self] text in DispatchQueue.main.async { self?.statusLine.title = text } }
-        monitor.onChange = { [weak self] on in
-            guard let self, self.autoItem.state == .on, on != self.ancOn else { return }
-            self.set(on)
+        monitor.onChange = { [weak self] mode in
+            guard let self, self.autoItem.state == .on else { return }
+            self.overlay.listening = mode
+            let on = mode == .noiseCancellation
+            if on != self.ancOn { self.set(on) }
         }
         nowPlaying.onChange = { [weak self] track in
             self?.track = track
@@ -157,6 +159,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 monitor.start()
             } else {
                 monitor.stop()
+                overlay.listening = nil
                 statusLine.title = "Automatic detection off"
             }
         }

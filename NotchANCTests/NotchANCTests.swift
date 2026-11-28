@@ -7,21 +7,24 @@ struct ParserTests {
     let dump = "2026-11-13 15:25:46.492 Df bluetoothd[67442:cee213] [com.apple.bluetooth:CBAccessoryDaemon] Connection monitor: CBDevice 7BA4, PrNm AirPods Pro, DvF 0x25885D80407F < AACP ANC Transparency >, LsnM Transparency, LsMC 0xE < ANC Transparency AutoANC >, BTv 6.0"
 
     @Test func deviceDump() {
-        #expect(AirPodsMonitor.parse(dump) == false)
-        #expect(AirPodsMonitor.parse(dump.replacingOccurrences(of: "LsnM Transparency", with: "LsnM ANC")) == true)
-        #expect(AirPodsMonitor.parse(dump.replacingOccurrences(of: "LsnM Transparency", with: "LsnM NoiseCancellation")) == true)
-        #expect(AirPodsMonitor.parse(dump.replacingOccurrences(of: "LsnM Transparency", with: "LsnM AutoANC")) == false)
+        #expect(AirPodsMonitor.parse(dump) == .transparency)
+        #expect(AirPodsMonitor.parse(dump.replacingOccurrences(of: "LsnM Transparency", with: "LsnM ANC")) == .noiseCancellation)
+        #expect(AirPodsMonitor.parse(dump.replacingOccurrences(of: "LsnM Transparency", with: "LsnM NoiseCancellation")) == .noiseCancellation)
+        #expect(AirPodsMonitor.parse(dump.replacingOccurrences(of: "LsnM Transparency", with: "LsnM AutoANC")) == .adaptive)
+        #expect(AirPodsMonitor.parse(dump.replacingOccurrences(of: "LsnM Transparency", with: "LsnM Something")) == .other)
     }
 
     @Test func listeningModeNumbers() {
-        #expect(AirPodsMonitor.parse("bluetoothd: Listening Mode is set to 2") == true)
-        #expect(AirPodsMonitor.parse("bluetoothd: Listening Mode is set to 3") == false)
-        #expect(AirPodsMonitor.parse("bluetoothd: Listening Mode is set to 4") == false)
+        #expect(AirPodsMonitor.parse("bluetoothd: Listening Mode is set to 1") == .off)
+        #expect(AirPodsMonitor.parse("bluetoothd: Listening Mode is set to 2") == .noiseCancellation)
+        #expect(AirPodsMonitor.parse("bluetoothd: Listening Mode is set to 3") == .transparency)
+        #expect(AirPodsMonitor.parse("bluetoothd: Listening Mode is set to 4") == .adaptive)
+        #expect(AirPodsMonitor.parse("bluetoothd: Listening Mode is set to 9") == .other)
     }
 
     @Test func receivedListenMode() {
-        #expect(AirPodsMonitor.parse("Received Listen mode 0x2 as ANC from device") == true)
-        #expect(AirPodsMonitor.parse("Received Listen mode 0x3 as Transparency from device") == false)
+        #expect(AirPodsMonitor.parse("Received Listen mode 0x2 as ANC from device") == .noiseCancellation)
+        #expect(AirPodsMonitor.parse("Received Listen mode 0x3 as Transparency from device") == .transparency)
     }
 
     @Test func unrelatedLine() {

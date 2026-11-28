@@ -124,6 +124,9 @@ final class NotchOverlay {
     var output = Output(name: "", headphones: false) {
         didSet { if output != oldValue { pills.forEach { $0.setOutput(output) } } }
     }
+    var listening: ListeningMode? {   // nil while unknown: no headphones, or detection off
+        didSet { if listening != oldValue { pills.forEach { $0.setListening(listening) } } }
+    }
     var track: Track? {
         didSet {
             if track != oldValue { pills.forEach { $0.setTrack(track) } }
@@ -175,7 +178,7 @@ final class NotchOverlay {
         let open = Set(pills.filter(\.expanded).map(\.uuid))
         pills.forEach { $0.close() }
         pills = NSScreen.screens.filter { !hiddenDisplays.contains($0.uuid) }.map {
-            Pill(screen: $0, mode: mode, color: mode.color, track: track, output: output, expanded: open.contains($0.uuid), menu: menu, tap: tap, glance: glance, countdown: countdown,
+            Pill(screen: $0, mode: mode, color: mode.color, track: track, output: output, listening: listening, expanded: open.contains($0.uuid), menu: menu, tap: tap, glance: glance, countdown: countdown,
                  onCommand: { [weak self] in self?.onCommand?($0) }, onOpen: { [weak self] in self?.onOpen?() })
         }
         for p in pills {
@@ -232,10 +235,12 @@ private final class PillState: ObservableObject {
     @Published var track: Track?
     @Published var appIcon: NSImage?   // the player app's icon, shown in place of album art
     @Published var output: Output
+    @Published var listening: ListeningMode?
     @Published var expanded: Bool
 
-    init(output: Output, expanded: Bool) {
+    init(output: Output, listening: ListeningMode?, expanded: Bool) {
         self.output = output
+        self.listening = listening
         self.expanded = expanded
     }
 }
@@ -293,13 +298,14 @@ private final class Pill {
             .insetBy(dx: 0, dy: -2)   // the pointer can sit on the screen's top edge
     }
 
-    init(screen: NSScreen, mode: PillMode, color: NSColor, track: Track?, output: Output, expanded: Bool, menu: NSMenu?,
+    init(screen: NSScreen, mode: PillMode, color: NSColor, track: Track?, output: Output, listening: ListeningMode?, expanded: Bool,
+         menu: NSMenu?,
          tap: AudioTap, glance: Glance, countdown: Countdown, onCommand: @escaping (MediaCommand) -> Void, onOpen: @escaping () -> Void) {
         layout = screen.pillLayout()
         self.mode = mode
         self.countdown = countdown
         uuid = screen.uuid
-        state = PillState(output: output, expanded: expanded)
+        state = PillState(output: output, listening: listening, expanded: expanded)
         self.onCommand = onCommand
         let below = Self.chips + 1 + Self.player + Self.tiles + Self.shadow
         var frame = layout.open.insetBy(dx: -Self.shadow, dy: 0)
@@ -342,6 +348,8 @@ private final class Pill {
     }
 
     func setOutput(_ output: Output) { state.output = output }
+
+    func setListening(_ mode: ListeningMode?) { state.listening = mode }
 
     func setExpanded(_ on: Bool) {
         guard on != state.expanded else { return }
@@ -535,14 +543,14 @@ private struct PillView: View {
     private var card: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
-                chip(mode == .anc ? "\(PillMode.anc.label) on" : "\(PillMode.anc.label) off", on: mode == .anc) {
+                chip(listeningText, on: mode == .anc) {
                     ZStack {
                         spot(.state, inCard: true)
                         if mode != .anc { chipIcon(PillMode.anc.icon).opacity(0.55) }
                     }
                 }
                 if !state.output.name.isEmpty {
-                    chip(state.output.name, on: false) {
+                    chip(state.output.volume.map { "\(state.output.name) · \($0)%" } ?? state.output.name, on: false) {
                         chipIcon(state.output.headphones ? "headphones" : "speaker.wave.2.fill")
                     }
                 }
@@ -559,6 +567,13 @@ private struct PillView: View {
                 .frame(height: Pill.tiles, alignment: .top)
         }
         .padding(.horizontal, Self.margin)
+    }
+
+    // The headphones' own mode when it is known and isn't Noise Cancellation; otherwise just on or off.
+    private var listeningText: String {
+        if mode == .anc { return "\(PillMode.anc.label) on" }
+        if let label = state.listening?.label, state.listening != .off { return label }
+        return "\(PillMode.anc.label) off"
     }
 
     private func chip(_ text: String, on: Bool, @ViewBuilder icon: () -> some View) -> some View {

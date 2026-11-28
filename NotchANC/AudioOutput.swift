@@ -1,12 +1,14 @@
-// Where sound is going: the output device's name, and whether it is headphones: any Bluetooth output
+// Where sound is going: the output device's name and volume, and whether it is headphones: any Bluetooth output
 // (AirPods, Beats, other headsets) or the headphone jack. Watches the default output device and, for the jack,
 // its data source.
 
+import AudioToolbox
 import CoreAudio
 
 struct Output: Equatable {
     var name: String
     var headphones: Bool
+    var volume: Int?   // percent; nil for devices with no volume of their own (some displays and interfaces)
 }
 
 final class AudioOutput {
@@ -26,12 +28,13 @@ final class AudioOutput {
         // ponytail: listeners on devices no longer in use stay registered; they only re-run this check.
         if watched.insert(device).inserted {
             watch(device, kAudioDevicePropertyDataSource, kAudioDevicePropertyScopeOutput)
+            watch(device, kAudioHardwareServiceDeviceProperty_VirtualMainVolume, kAudioDevicePropertyScopeOutput)
         }
         let transport = Self.value(device, kAudioDevicePropertyTransportType, kAudioObjectPropertyScopeGlobal)
         let source = Self.value(device, kAudioDevicePropertyDataSource, kAudioDevicePropertyScopeOutput)
         let headphones = transport == kAudioDeviceTransportTypeBluetooth || transport == kAudioDeviceTransportTypeBluetoothLE
             || source == 0x6864_706E   // 'hdpn', the headphone jack
-        let now = Output(name: Self.name(device), headphones: headphones)
+        let now = Output(name: Self.name(device), headphones: headphones, volume: Self.volume(device))
         guard now != current else { return }
         current = now
         onChange?()
@@ -49,6 +52,15 @@ final class AudioOutput {
         var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
         guard AudioObjectGetPropertyData(id, &address, 0, nil, &size, &name) == noErr, let name else { return "" }
         return name.takeRetainedValue() as String
+    }
+
+    private static func volume(_ id: AudioObjectID) -> Int? {
+        var address = AudioObjectPropertyAddress(mSelector: kAudioHardwareServiceDeviceProperty_VirtualMainVolume,
+                                                 mScope: kAudioDevicePropertyScopeOutput, mElement: kAudioObjectPropertyElementMain)
+        var level: Float32 = 0
+        var size = UInt32(MemoryLayout<Float32>.size)
+        guard AudioObjectGetPropertyData(id, &address, 0, nil, &size, &level) == noErr else { return nil }
+        return Int((level * 100).rounded())
     }
 
     private static func value(_ id: AudioObjectID, _ selector: AudioObjectPropertySelector, _ scope: AudioObjectPropertyScope) -> UInt32? {

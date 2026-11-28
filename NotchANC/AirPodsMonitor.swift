@@ -7,8 +7,44 @@
 import Foundation
 import IOBluetooth
 
+enum ListeningMode: Equatable {
+    case off, noiseCancellation, transparency, adaptive
+    case other   // a mode the log names in a way we don't know; only "not Noise Cancellation" is certain
+
+    var label: String? {
+        switch self {
+        case .off: "Off"
+        case .noiseCancellation: PillMode.anc.label
+        case .transparency: "Transparency"
+        case .adaptive: "Adaptive"
+        case .other: nil
+        }
+    }
+
+    // bluetoothd's numbers ("Listening Mode is set to 2") and words ("LsnM ANC", "as Transparency").
+    init?(number: Int) {
+        switch number {
+        case 1: self = .off
+        case 2: self = .noiseCancellation
+        case 3: self = .transparency
+        case 4: self = .adaptive
+        default: return nil
+        }
+    }
+
+    init(word: Substring) {
+        switch word {
+        case "ANC": self = .noiseCancellation
+        case "Transparency": self = .transparency
+        case "AutoANC", "Adaptive": self = .adaptive
+        case "Off", "Normal": self = .off
+        default: self = word.hasPrefix("NoiseC") ? .noiseCancellation : .other
+        }
+    }
+}
+
 final class AirPodsMonitor: NSObject {
-    var onChange: ((Bool) -> Void)?
+    var onChange: ((ListeningMode?) -> Void)?   // nil once the headphones are gone
     var onStatus: ((String) -> Void)?
     private var proc: Process?
     private var buffer = Data()
@@ -35,20 +71,19 @@ final class AirPodsMonitor: NSObject {
         wasConnected = nil
     }
 
-    // true = Noise Cancellation, false = any other mode, nil = line not understood
-    static func parse(_ line: String) -> Bool? {
+    // The mode a log line reports; nil = line not understood
+    static func parse(_ line: String) -> ListeningMode? {
         if let r = line.range(of: "Listening Mode is set to ") {
             let digits = line[r.upperBound...].prefix(while: { $0.isNumber })
-            if let n = Int(digits) { return n == 2 }
+            if let n = Int(digits) { return ListeningMode(number: n) ?? .other }
         }
         if let r = line.range(of: "Received Listen mode"), let asR = line.range(of: " as ", range: r.upperBound..<line.endIndex) {
-            let word = line[asR.upperBound...].prefix(while: { $0.isLetter })
-            return word == "ANC"
+            return ListeningMode(word: line[asR.upperBound...].prefix(while: { $0.isLetter }))
         }
         if let r = line.range(of: "LsnM ") {
             let word = line[r.upperBound...].prefix(while: { $0.isLetter })
             if word.isEmpty { return nil }
-            return word == "ANC" || word.hasPrefix("NoiseC")
+            return ListeningMode(word: word)
         }
         return nil
     }
@@ -65,7 +100,7 @@ final class AirPodsMonitor: NSObject {
             guard (try? p.run()) != nil else { return }
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
             p.waitUntilExit()
-            var state: Bool?
+            var state: ListeningMode?
             for line in String(decoding: data, as: UTF8.self).split(separator: "\n") {
                 if let v = Self.parse(String(line)) { state = v }
             }
@@ -119,7 +154,7 @@ final class AirPodsMonitor: NSObject {
         guard !devices.isEmpty else { return }   // no list (e.g. permission denied): don't guess
         let connected = devices.contains { $0.isConnected() && $0.deviceClassMajor == kBluetoothDeviceClassMajorAudio }
         if connected != wasConnected {
-            if connected { backfill() } else { onChange?(false); onStatus?("AirPods: not connected") }
+            if connected { backfill() } else { onChange?(nil); onStatus?("AirPods: not connected") }
             wasConnected = connected
         }
     }
