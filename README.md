@@ -41,8 +41,14 @@ On displays without a notch, such as an external monitor, the pill sits centred 
 ### Features
 
 - **Automatic.** NotchANC follows your AirPods' listening mode with no setup and nothing to pair. The card names the mode you're in: Noise Cancellation, Transparency or Adaptive.
-- **Now Playing.** Shows the track from any app: music, videos in a browser, podcasts. Hover to open a card with the status (Noise Cancellation, where sound is going) and the player: pause, skip or go back. The status row also shows your headphones' battery. Tiles under the player show your next calendar event and how busy the Mac is (processor, graphics, memory, disk), and start a quick timer or a focus session. Two more tabs hold a shelf for files you drag onto the pill and the last things you copied, both searchable, with pins for the copies you want to keep. ⌃⌥V and ⌃⌥F open them from any app, keyboard only: type to search, ↑ and ↓ to choose, Return to copy or open. Click the track to jump to the app, or the browser tab, that's playing it.
-- **A live visualizer.** The bars beside the notch move with the sound that's playing.
+- **Now Playing.** Shows the track from any app: music, videos in a browser, podcasts. Hover to open the card and pause, skip or go back. Click the track to jump to the app, or the browser tab, that's playing it.
+- **Status at a glance.** The top of the card shows the listening mode, where sound is going and its volume, and your headphones' battery.
+- **Tiles.** Under the player: your next calendar event, four rings for how busy the Mac is (processor, graphics, memory, disk), and a timer.
+- **Quick timer and focus session.** Start a timer in one click; the pill counts down and chimes at the end. A focus session can also run Shortcuts of yours when it starts and ends, to switch a macOS Focus.
+- **File shelf.** Drag files onto the pill to park them, then drag one back out when you need it. The files stay where they are.
+- **Clipboard history.** The last ten texts you copied. Click one to copy it again, pin the ones to keep, delete one, or clear the rest.
+- **Search and shortcuts.** The shelf and the clipboard are searchable. ⌃⌥V and ⌃⌥F open them from any app, keyboard only: type to search, ↑ and ↓ to choose, Return to copy or open, Esc to close.
+- **A live visualizer.** The bars beside the notch move with the sound that's playing. While a timer shows its countdown there, the sound becomes a soft wave of light along the pill's lower edge.
 - **Media without ANC.** With Noise Cancellation off, the pill takes the Now Playing colour and shows the playing app's icon while audio plays through headphones (AirPods, any Bluetooth headset, or the headphone jack). In Settings › Pill, choose instead to show it for sound from any output, to keep it always visible, or to never show it.
 - **Notch, Dynamic Island or neither.** Sizes itself to the camera cutout on notch MacBooks and on the MacBook Pro with Dynamic Island. Choose which displays show it.
 - **Stays out of the way.** Clicks pass through to the menu bar. Behind full-screen apps on external displays it hides. Clicking it never brings NotchANC to the front; only its search field takes the keyboard, and gives it back when the card closes.
