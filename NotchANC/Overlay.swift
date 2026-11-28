@@ -2,7 +2,8 @@
 // AirPods Noise Cancellation on, or Now Playing while it's off.
 // Collapsed, the playing app's icon (or the state's, with no track) sits on the left and the visualizer on the right;
 // without a cutout the track's text sits between them and the bar hugs it.
-// Hovering opens one card: status chips (Noise Cancellation, where sound is going) above the Now Playing player.
+// Hovering opens one card: status chips (Noise Cancellation, where sound is going) above the Now Playing player,
+// or with no track above tiles of things worth a glance.
 // The collapsed pill's icons travel into the card, and the visualizer rides its edge.
 
 import Cocoa
@@ -114,6 +115,7 @@ final class NotchOverlay {
     private var monitors: [Any] = []
     private var shown: PillMode?   // what the pills show; outlives `mode` while the pointer holds the player open
     private let tap = AudioTap()
+    private let glance = Glance()
     var hiddenDisplays: Set<String> = []
     var menu: NSMenu?   // right-click menu, the same one the menu bar icon shows
     var onCommand: ((MediaCommand) -> Void)?
@@ -130,6 +132,9 @@ final class NotchOverlay {
 
     // The visualizer hears the Mac's output only while a pill shows something playing.
     private func listen() { tap.isRunning = shown != nil && track?.playing == true }
+
+    // The tiles' readings are taken only while a pill is open.
+    private func watch() { glance.isWatching = pills.contains(where: \.expanded) }
 
     // nil hides the pill. Switching between ANC and media rebuilds it in the new colour.
     var mode: PillMode? { didSet { update() } }
@@ -149,6 +154,7 @@ final class NotchOverlay {
     private func hide() {
         shown = nil
         listen()
+        glance.isWatching = false
         monitors.forEach(NSEvent.removeMonitor)
         monitors = []
         let old = pills
@@ -165,7 +171,7 @@ final class NotchOverlay {
         let open = Set(pills.filter(\.expanded).map(\.uuid))
         pills.forEach { $0.close() }
         pills = NSScreen.screens.filter { !hiddenDisplays.contains($0.uuid) }.map {
-            Pill(screen: $0, mode: mode, color: mode.color, track: track, output: output, expanded: open.contains($0.uuid), menu: menu, tap: tap,
+            Pill(screen: $0, mode: mode, color: mode.color, track: track, output: output, expanded: open.contains($0.uuid), menu: menu, tap: tap, glance: glance,
                  onCommand: { [weak self] in self?.onCommand?($0) }, onOpen: { [weak self] in self?.onOpen?() })
         }
         for p in pills {
@@ -196,9 +202,10 @@ final class NotchOverlay {
             if inside {
                 p.collapseTimer?.invalidate(); p.collapseTimer = nil
                 if !p.expanded, p.openTimer == nil {
-                    p.openTimer = .scheduledTimer(withTimeInterval: Pill.openDelay, repeats: false) { [weak p] _ in
+                    p.openTimer = .scheduledTimer(withTimeInterval: Pill.openDelay, repeats: false) { [weak self, weak p] _ in
                         p?.openTimer = nil
                         p?.setExpanded(true)
+                        self?.watch()
                     }
                 }
             } else {
@@ -207,6 +214,7 @@ final class NotchOverlay {
                     p.collapseTimer = .scheduledTimer(withTimeInterval: Pill.closeDelay, repeats: false) { [weak self, weak p] _ in
                         p?.collapseTimer = nil
                         p?.setExpanded(false)
+                        self?.watch()
                         self?.update()
                     }
                 }
@@ -230,8 +238,8 @@ private final class PillState: ObservableObject {
 
 private final class Pill {
     static let chips: CGFloat = 40     // the status row at the top of the card
-    static let player: CGFloat = 84    // the Now Playing row under it
-    static let empty: CGFloat = 48     // what takes the player's place with no track
+    static let player: CGFloat = 84    // the Now Playing row under it, or the tiles with no track
+    static let card = chips + 1 + player   // the card under the bar: the chips, a hairline, then the player or the tiles
     static let shadow: CGFloat = 40    // room around the open card for its shadow, so the window never cuts it
     static let font = NSFont.systemFont(ofSize: 11, weight: .semibold)
     static let openDelay: TimeInterval = 0.12
@@ -248,9 +256,6 @@ private final class Pill {
     var expanded: Bool { state.expanded }
     var openTimer: Timer?
     var collapseTimer: Timer?
-
-    // The card under the bar: the chips, a hairline, then the player or its stand-in.
-    static func card(_ track: Track?) -> CGFloat { chips + 1 + (track == nil ? empty : player) }
 
     // What the bar says on a display without a cutout.
     static func barText(_ mode: PillMode, _ track: Track?) -> String? { track?.text ?? (mode == .anc ? mode.label : nil) }
@@ -270,20 +275,20 @@ private final class Pill {
     // the pill is centred in it and fills only what's shown.
     var hitRect: NSRect {
         let w = state.expanded ? layout.open.width : Self.barWidth(layout, mode, state.track)
-        let h = layout.bar.height + (state.expanded ? Self.card(state.track) : 0)
+        let h = layout.bar.height + (state.expanded ? Self.card : 0)
         let f = window.frame
         return NSRect(x: f.midX - w / 2, y: f.maxY - h, width: w, height: h)
             .insetBy(dx: 0, dy: -2)   // the pointer can sit on the screen's top edge
     }
 
     init(screen: NSScreen, mode: PillMode, color: NSColor, track: Track?, output: Output, expanded: Bool, menu: NSMenu?,
-         tap: AudioTap, onCommand: @escaping (MediaCommand) -> Void, onOpen: @escaping () -> Void) {
+         tap: AudioTap, glance: Glance, onCommand: @escaping (MediaCommand) -> Void, onOpen: @escaping () -> Void) {
         layout = screen.pillLayout()
         self.mode = mode
         uuid = screen.uuid
         state = PillState(output: output, expanded: expanded)
         self.onCommand = onCommand
-        let below = Self.chips + 1 + Self.player + Self.shadow
+        let below = Self.card + Self.shadow
         var frame = layout.open.insetBy(dx: -Self.shadow, dy: 0)
         frame.origin.y -= below
         frame.size.height += below
@@ -306,7 +311,7 @@ private final class Pill {
         window.contentView = root
 
         let view = PillView(layout: layout, mode: mode, color: color,
-                            reduceMotion: reduceMotion, state: state, tap: tap, onCommand: { [weak self] in self?.send($0) },
+                            reduceMotion: reduceMotion, state: state, tap: tap, glance: glance, onCommand: { [weak self] in self?.send($0) },
                             onOpen: onOpen)
         let host = FirstClickHostingView(rootView: view)
         host.frame = root.bounds
@@ -366,6 +371,7 @@ private struct PillView: View {
     static let conceal = Animation.timingCurve(0.32, 0.72, 0, 1, duration: 0.15)
     static let swap = Animation.spring(duration: 0.35, bounce: 0)     // play and pause trading places
     static let press = Animation.timingCurve(0.32, 0.72, 0, 1, duration: 0.15)
+    static let margin: CGFloat = 20   // the card's side padding
 
     let layout: PillLayout
     let mode: PillMode
@@ -373,6 +379,7 @@ private struct PillView: View {
     let reduceMotion: Bool
     @ObservedObject var state: PillState
     let tap: AudioTap
+    let glance: Glance
     let onCommand: (MediaCommand) -> Void
     let onOpen: () -> Void
     @Namespace private var space
@@ -385,7 +392,7 @@ private struct PillView: View {
 
     var body: some View {
         let h = layout.bar.height
-        let card = Pill.card(state.track)
+        let card = Pill.card
         let width = open ? layout.open.width : Pill.barWidth(layout, mode, state.track)
         let radius: CGFloat = open ? 24 : min(13, h / 2 - 1)   // a 24pt menu bar can't take 13pt corners
         let shape = UnevenRoundedRectangle(bottomLeadingRadius: radius, bottomTrailingRadius: radius)
@@ -497,7 +504,7 @@ private struct PillView: View {
         }
     }
 
-    // Status chips, a hairline, then the player or its stand-in.
+    // Status chips, a hairline, then the player or, with no track, the tiles.
     private var card: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
@@ -519,14 +526,10 @@ private struct PillView: View {
             if let track = state.track {
                 player(track).frame(height: Pill.player)
             } else {
-                Text("Nothing playing")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.5))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .frame(height: Pill.empty)
+                Tiles(glance: glance, tint: tint).frame(height: Pill.player)
             }
         }
-        .padding(.horizontal, 20)
+        .padding(.horizontal, Self.margin)
     }
 
     private func chip(_ text: String, on: Bool, @ViewBuilder icon: () -> some View) -> some View {
@@ -628,6 +631,48 @@ private struct PillView: View {
         }
         .buttonStyle(Press(reduceMotion: reduceMotion))
         .accessibilityLabel(name)
+    }
+}
+
+// What the card shows with no track: one small tile per thing worth a glance. Only this view redraws as readings change.
+private struct Tiles: View {
+    static let spacing: CGFloat = 8
+    static let width = (PillLayout.cardWidth - 2 * PillView.margin - 3 * spacing) / 4   // room for four in a row
+
+    @ObservedObject var glance: Glance
+    let tint: Color
+
+    var body: some View {
+        HStack(spacing: Self.spacing) {
+            if let headphones = glance.headphones, let level = headphones.level {
+                tile(headphones.main == nil ? "airpodspro" : "headphones", headphones.name, "\(level)%",
+                     headphones.charger.map { "Case \($0)%" })
+            }
+            if let battery = glance.mac.battery {
+                tile("laptopcomputer", "Mac", "\(battery)%",
+                     glance.mac.charging ? "Charging · CPU \(glance.mac.processor)%" : "CPU \(glance.mac.processor)%")
+            } else {
+                tile("cpu", "CPU", "\(glance.mac.processor)%", nil)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func tile(_ symbol: String, _ name: String, _ value: String, _ detail: String?) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 4) {
+                Image(systemName: symbol).font(.system(size: 10, weight: .semibold)).foregroundStyle(tint)
+                Text(name).font(.system(size: 10, weight: .medium)).foregroundStyle(.white.opacity(0.55)).lineLimit(1)
+            }
+            Text(value).font(.system(size: 14, weight: .semibold).monospacedDigit()).foregroundStyle(.white).lineLimit(1)
+            if let detail {
+                Text(detail).font(.system(size: 10, weight: .medium).monospacedDigit()).foregroundStyle(.white.opacity(0.55)).lineLimit(1)
+            }
+        }
+        .padding(10)
+        .frame(width: Self.width, height: 64, alignment: .topLeading)
+        .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .accessibilityElement(children: .combine)
     }
 }
 

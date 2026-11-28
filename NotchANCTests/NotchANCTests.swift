@@ -73,6 +73,22 @@ struct MediaVisibilityTests {
     }
 }
 
+struct GlanceTests {
+    // system_profiler SPBluetoothDataType -json on macOS 27.2 (trimmed): levels come as "34%" strings.
+    @Test func headphones() {
+        let report = """
+        {"SPBluetoothDataType":[{"device_connected":[
+          {"Keyboard":{"device_minorType":"Keyboard"}},
+          {"AirPods Pro":{"device_batteryLevelCase":"34%","device_batteryLevelLeft":"90%","device_batteryLevelRight":"100%"}}
+        ],"device_not_connected":[{"Old Headset":{"device_batteryLevelMain":"50%"}}]}]}
+        """
+        let found = Glance.headphones(in: Data(report.utf8))
+        #expect(found == Headphones(name: "AirPods Pro", left: 90, right: 100, charger: 34, main: nil))
+        #expect(found?.level == 90)
+        #expect(Glance.headphones(in: Data("{}".utf8)) == nil)
+    }
+}
+
 struct ColorTests {
     @Test func hexRoundTrip() {
         for hex in ["#FF9F0A", "#0A84FF", "#000000", "#FFFFFF"] { #expect(NSColor(hex: hex)?.hex == hex) }
