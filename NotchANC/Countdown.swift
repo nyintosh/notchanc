@@ -10,7 +10,9 @@ struct Session: Equatable {
 }
 
 final class Countdown: ObservableObject {
-    static let presets = [5, 15, 25]   // minutes
+    static let presetKeys = ["timerFirst", "timerSecond", "timerThird"]   // the tile's three lengths, in minutes
+    static let presetDefaults = [5, 15, 25]
+    static let presetRange = 1...180
     static let focusMinutesKey = "focusMinutes"
     static let focusLengths = [25, 50]
     static let startShortcutKey = "focusStartShortcut"

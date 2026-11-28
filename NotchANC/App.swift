@@ -57,7 +57,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         defaults.register(defaults: PillMode.allCases.reduce(["automatic": true, MediaVisibility.key: MediaVisibility.headphones.rawValue,
                                                              Countdown.focusMinutesKey: Countdown.focusLengths[0], "menuBarIcon": menuBarIcons[0]]) {
             $0.merging($1.defaults) { a, _ in a }
-        })
+        }
+        .merging(Dictionary(uniqueKeysWithValues: zip(Countdown.presetKeys, Countdown.presetDefaults))) { a, _ in a }
+        .merging(Dictionary(uniqueKeysWithValues: CardPart.allCases.map { ($0.rawValue, true) })) { a, _ in a })
         // 1.0.0–1.0.3 kept one accent colour as an index into five swatches.
         if let i = defaults.object(forKey: "accentColor") as? Int {
             defaults.set(["#FF9F0A", "#30D158", "#0A84FF", "#BF5AF2", "#FF375F"][min(max(i, 0), 4)], forKey: PillMode.anc.colorKey)

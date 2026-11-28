@@ -43,16 +43,16 @@ On displays without a notch, such as an external monitor, the pill sits centred 
 - **Automatic.** NotchANC follows your AirPods' listening mode with no setup and nothing to pair.
 - **Now Playing.** Shows the track from any app: music, videos in a browser, podcasts. Hover to open a card with the status (Noise Cancellation, where sound is going) and the player: pause, skip or go back. Tiles under it show your headphones' battery, your next calendar event and the Mac's battery and processor load, and start a quick timer or a focus session. Two more tabs hold a shelf for files you drag onto the pill and the last things you copied. Click the track to jump to the app, or the browser tab, that's playing it.
 - **A live visualizer.** The bars beside the notch move with the sound that's playing.
-- **Media without ANC.** With Noise Cancellation off, the pill takes the Now Playing colour and shows the playing app's icon while audio plays through headphones (AirPods, any Bluetooth headset, or the headphone jack). In Settings › Appearance, choose instead to show it for sound from any output, to keep it always visible, or to never show it.
+- **Media without ANC.** With Noise Cancellation off, the pill takes the Now Playing colour and shows the playing app's icon while audio plays through headphones (AirPods, any Bluetooth headset, or the headphone jack). In Settings › Pill, choose instead to show it for sound from any output, to keep it always visible, or to never show it.
 - **Notch, Dynamic Island or neither.** Sizes itself to the camera cutout on notch MacBooks and on the MacBook Pro with Dynamic Island. Choose which displays show it.
 - **Stays out of the way.** Clicks pass through to the menu bar. Behind full-screen apps on external displays it hides. Clicking it never steals focus.
 - **Right-click the pill** for Settings, Check for Updates and Quit.
 - **Hide the menu bar icon** if you prefer. Open NotchANC again to bring up Settings.
-- **Make it yours.** Pick the colour (any colour) and icon for each state, choose the menu bar icon, choose when the Now Playing pill shows, open at login, and get automatic updates.
+- **Make it yours.** Pick the colour (any colour) and icon for each state, choose the menu bar icon, choose when the Now Playing pill shows, turn each tile and tab of the card on or off, set the timer's lengths, open at login, and get automatic updates.
 
 <p align="center">
-  <img src="docs/images/settings-general.png" width="400" alt="Settings, General tab">
-  <img src="docs/images/settings-appearance.png" width="400" alt="Settings, Appearance tab">
+  <img src="docs/images/settings-general.png" width="400" alt="Settings, General pane">
+  <img src="docs/images/settings-pill.png" width="400" alt="Settings, Pill pane">
 </p>
 
 ## Install

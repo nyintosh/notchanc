@@ -20,9 +20,14 @@ final class Clipboard: ObservableObject {
         timer = .scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in self?.check() }
     }
 
+    // Turned off in Settings, it forgets what it had and takes nothing in.
     private func check() {
         guard board.changeCount != count else { return }
         count = board.changeCount
+        guard UserDefaults.standard.bool(forKey: CardPart.clipboard.rawValue) else {
+            if !items.isEmpty { items = [] }
+            return
+        }
         guard let types = board.types, Self.secret.isDisjoint(with: types), let text = board.string(forType: .string) else { return }
         items = Self.adding(text, to: items)
     }

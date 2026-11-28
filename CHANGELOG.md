@@ -5,8 +5,9 @@
 - **Tiles in the card.** Under the player: your headphones' battery (with the case) and the next calendar event with how soon it starts, and the Mac's battery and processor load. The calendar is read only after you press Show events.
 - **File shelf.** Drag files onto the pill to park them; open one with a click, drag it back out to use it. The files stay where they are.
 - **Clipboard history.** The last ten texts you copied, in a tab of the card; click one to copy it again. Kept in memory only, and anything a password manager marks as secret is skipped.
-- **Quick timer and focus session.** Start 5, 15 or 25 minutes from the card, or a focus session (25 or 50 minutes, set in Settings › General). The pill shows the time left and rings at the end. A focus session can run one of your Shortcuts when it starts and another when it ends, to turn a macOS Focus on and off.
-- **Choose when the Now Playing pill shows.** Settings › Appearance now offers Never, With headphones, With any output and Always. With any output also shows it for the Mac's speakers; Always keeps the pill in place even when nothing plays.
+- **Quick timer and focus session.** Start 5, 15 or 25 minutes from the card, or a focus session (25 or 50 minutes, set in Settings › Focus). The pill shows the time left and rings at the end. A focus session can run one of your Shortcuts when it starts and another when it ends, to turn a macOS Focus on and off.
+- **A new Settings window.** A sidebar with General, Pill, Card, Focus and About. Card turns each tile and the shelf and clipboard tabs on or off; Focus sets the timer's three lengths and the focus session.
+- **Choose when the Now Playing pill shows.** Settings › Pill now offers Never, With headphones, With any output and Always. With any output also shows it for the Mac's speakers; Always keeps the pill in place even when nothing plays.
 
 ## [1.0.6]
 - **Click the track to go to it.** Clicking the player's icon or title brings the playing app forward, and in a browser switches to the tab that's playing. macOS asks once per browser.

@@ -211,7 +211,7 @@ final class NotchOverlay {
     private func hover() {
         let mouse = NSEvent.mouseLocation
         // A drag in progress whose pasteboard holds files: the pill opens on the shelf, ready for the drop.
-        let carryingFiles = NSEvent.pressedMouseButtons & 1 != 0
+        let carryingFiles = NSEvent.pressedMouseButtons & 1 != 0 && UserDefaults.standard.bool(forKey: CardPart.shelf.rawValue)
             && NSPasteboard(name: .drag).canReadObject(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true])
         for p in pills {
             let inside = p.hitRect.contains(mouse)
@@ -242,6 +242,12 @@ final class NotchOverlay {
 }
 
 // What the SwiftUI drawing follows; the AppKit side changes it inside the pill's animations.
+// The parts of the card that Settings can turn off, by their UserDefaults key.
+enum CardPart: String, CaseIterable {
+    case headphones = "tileHeadphones", calendar = "tileCalendar", mac = "tileMac", timer = "tileTimer"
+    case shelf = "tabShelf", clipboard = "tabClipboard"
+}
+
 // What the open card shows.
 private enum CardTab: CaseIterable {
     case now, shelf, clipboard
@@ -445,6 +451,8 @@ private struct PillView: View {
     let clipboard: Clipboard
     let onCommand: (MediaCommand) -> Void
     let onOpen: () -> Void
+    @AppStorage(CardPart.shelf.rawValue) private var showsShelf = true
+    @AppStorage(CardPart.clipboard.rawValue) private var showsClipboard = true
     @Namespace private var space
     @State private var opening = false   // the press on the icon and title, which the travelling icon follows too
 
@@ -485,6 +493,7 @@ private struct PillView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in
+            guard showsShelf else { return false }
             for provider in providers {
                 _ = provider.loadObject(ofClass: URL.self) { url, _ in
                     if let url { DispatchQueue.main.async { shelf.add([url]) } }
@@ -643,9 +652,17 @@ private struct PillView: View {
         .padding(.horizontal, Self.margin)
     }
 
-    private var tabs: some View {
+    // No tab bar when both extra tabs are turned off.
+    @ViewBuilder private var tabs: some View {
+        let shown = CardTab.allCases.filter { $0 == .now || ($0 == .shelf ? showsShelf : showsClipboard) }
+        if shown.count > 1 {
+            tabBar(shown)
+        }
+    }
+
+    private func tabBar(_ shown: [CardTab]) -> some View {
         HStack(spacing: 2) {
-            ForEach(CardTab.allCases, id: \.self) { tab in
+            ForEach(shown, id: \.self) { tab in
                 Button {
                     withAnimation(reduceMotion ? nil : Self.open) { state.tab = tab }
                 } label: {
@@ -876,22 +893,34 @@ private struct Tiles: View {
     @ObservedObject var countdown: Countdown
     let tint: Color
     let reduceMotion: Bool
+    @AppStorage(CardPart.headphones.rawValue) private var showsHeadphones = true
+    @AppStorage(CardPart.calendar.rawValue) private var showsCalendar = true
+    @AppStorage(CardPart.mac.rawValue) private var showsMac = true
+    @AppStorage(CardPart.timer.rawValue) private var showsTimer = true
+    @AppStorage(Countdown.presetKeys[0]) private var first = Countdown.presetDefaults[0]
+    @AppStorage(Countdown.presetKeys[1]) private var second = Countdown.presetDefaults[1]
+    @AppStorage(Countdown.presetKeys[2]) private var third = Countdown.presetDefaults[2]
 
     var body: some View {
         HStack(spacing: Self.spacing) {
-            if let headphones = glance.headphones, let level = headphones.level {
+            if showsHeadphones, let headphones = glance.headphones, let level = headphones.level {
                 tile(headphones.main == nil ? "airpodspro" : "headphones", headphones.name, "\(level)%",
                      headphones.charger.map { "Case \($0)%" })
             }
-            calendar
-            if let battery = glance.mac.battery {
-                tile("laptopcomputer", "Mac", "\(battery)%",
-                     glance.mac.charging ? "Charging · CPU \(glance.mac.processor)%" : "CPU \(glance.mac.processor)%")
-            } else {
-                tile("cpu", "CPU", "\(glance.mac.processor)%", nil)
-            }
-            timer
+            if showsCalendar { calendar }
+            if showsMac { mac }
+            if showsTimer { timer }
             Spacer(minLength: 0)
+        }
+    }
+
+    // The Mac's battery with the processor load under it; on a Mac without a battery, the load alone.
+    @ViewBuilder private var mac: some View {
+        if let battery = glance.mac.battery {
+            tile("laptopcomputer", "Mac", "\(battery)%",
+                 glance.mac.charging ? "Charging · CPU \(glance.mac.processor)%" : "CPU \(glance.mac.processor)%")
+        } else {
+            tile("cpu", "CPU", "\(glance.mac.processor)%", nil)
         }
     }
 
@@ -940,7 +969,7 @@ private struct Tiles: View {
             box {
                 caption("timer", "Timer")
                 HStack(spacing: 3) {
-                    ForEach(Countdown.presets, id: \.self) { minutes in
+                    ForEach(Array([first, second, third].enumerated()), id: \.offset) { _, minutes in
                         start("\(minutes) minute timer") { countdown.start(minutes: minutes, focus: false) } label: {
                             Text("\(minutes)").font(.system(size: 11, weight: .semibold).monospacedDigit())
                         }
